@@ -22,16 +22,14 @@ dependencies {
 
     // 1. 스프링 웹 (Producer에서 REST API 만들 때 필요)
     implementation 'org.springframework.boot:spring-boot-starter-web'
-
     // 2. 스프링 카프카 (핵심 연동 라이브러리)
     implementation 'org.springframework.kafka:spring-kafka'
-
     // 3. 롬복 (Lombok - @RequiredArgsConstructor 등 사용 시 편리)
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
-
     // Spring Data Elasticsearch 추가
     implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 }
 
 test {

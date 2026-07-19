@@ -45,3 +45,10 @@ services:
       - ELASTICSEARCH_HOSTS=http://local-elasticsearch:9200 # 컨테이너 간 통신 주소
     depends_on:
       - local-elasticsearch # 엘라스틱서치가 먼저 켜진 후 기동
+
+  # 4. 레디스 (고속 중복 체크용 캐시)
+  local-redis:
+    image: redis:7.2-alpine
+    container_name: local-redis
+    ports:
+      - "6379:6379"
