@@ -4,3 +4,8 @@ server:
 spring:
   kafka:
     bootstrap-servers: localhost:9092
+  # 레디스 설정 추가
+  data:
+    redis:
+      host: localhost
+      port: 6379

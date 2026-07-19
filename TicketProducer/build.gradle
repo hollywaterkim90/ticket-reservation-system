@@ -29,6 +29,8 @@ dependencies {
     // 3. 롬복 (Lombok - @RequiredArgsConstructor 등 사용 시 편리)
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
+
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 }
 
 test {
