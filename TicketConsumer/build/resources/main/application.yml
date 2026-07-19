@@ -1,0 +1,13 @@
+server:
+  port: 8081
+
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: ticket-group-es
+      auto-offset-reset: latest
+
+  # 엘라스틱서치 설정 추가
+  elasticsearch:
+    Uris: http://localhost:9200

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/TicketConsumer.iml" filepath="$PROJECT_DIR$/TicketConsumer.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/TicketConsumer.main.iml" filepath="$PROJECT_DIR$/.idea/modules/TicketConsumer.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/TicketConsumer.test.iml" filepath="$PROJECT_DIR$/.idea/modules/TicketConsumer.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/TicketProducer.iml" filepath="$PROJECT_DIR$/TicketProducer.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/TicketProducer.main.iml" filepath="$PROJECT_DIR$/.idea/modules/TicketProducer.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/TicketProducer.test.iml" filepath="$PROJECT_DIR$/.idea/modules/TicketProducer.test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/kafka.iml" filepath="$PROJECT_DIR$/.idea/kafka.iml" />
+    </modules>
+  </component>
+</project>

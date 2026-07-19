@@ -1,0 +1,12 @@
+<component name="libraryTable">
+  <library name="Gradle: org.elasticsearch.client:elasticsearch-rest-client:8.13.4" type="java-imported" external-system-id="GRADLE">
+    <properties groupId="org.elasticsearch.client" artifactId="elasticsearch-rest-client" version="8.13.4" baseVersion="8.13.4" />
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.elasticsearch.client/elasticsearch-rest-client/8.13.4/eb5be3f924f72faaec1df2a6a3890147e00d27ec/elasticsearch-rest-client-8.13.4.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.elasticsearch.client/elasticsearch-rest-client/8.13.4/f3da4d5f95d3a3875d38f5886b7c9ff9d9219fc4/elasticsearch-rest-client-8.13.4-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

@@ -1,0 +1,47 @@
+version: '3.8'
+
+#  docker compose up -d local-kafka
+#  docker compose up -d local-elasticsearch
+#  docker compose up -d local-kibana
+services:
+  # 1. 아파치 카프카 브로커
+  local-kafka:
+    image: apache/kafka:3.7.0
+    container_name: local-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+
+  # 2. 엘라스틱서치 (검색/저장 엔진)
+  local-elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    container_name: local-elasticsearch
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false # 로컬 테스트용 보안 해제
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m # 메모리 제한 (컴퓨터 과부하 방지)
+
+  # 3. 키바나 (시각화 툴)
+  local-kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.1
+    container_name: local-kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://local-elasticsearch:9200 # 컨테이너 간 통신 주소
+    depends_on:
+      - local-elasticsearch # 엘라스틱서치가 먼저 켜진 후 기동

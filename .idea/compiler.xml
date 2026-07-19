@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile name="Gradle Imported" enabled="true">
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="false">
+          <entry name="$USER_HOME$/.gradle/caches/modules-2/files-2.1/org.projectlombok/lombok/1.18.32/17d46b3e205515e1e8efd3ee4d57ce8018914163/lombok-1.18.32.jar" />
+        </processorPath>
+        <module name="TicketProducer.main" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="kafka_test.main" target="17" />
+      <module name="kafka_test.test" target="17" />
+      <module name="TicketConsumer" target="17" />
+      <module name="TicketConsumer.main" target="17" />
+      <module name="TicketConsumer.test" target="17" />
+      <module name="TicketProducer" target="17" />
+      <module name="TicketProducer.main" target="17" />
+      <module name="TicketProducer.test" target="17" />
+      <module name="untitled" target="17" />
+      <module name="untitled.main" target="17" />
+      <module name="untitled.test" target="17" />
+    </bytecodeTargetLevel>
+  </component>
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="TicketConsumer" options="-parameters" />
+      <module name="TicketConsumer.main" options="-parameters" />
+      <module name="TicketConsumer.test" options="-parameters" />
+      <module name="TicketProducer" options="-parameters" />
+      <module name="TicketProducer.main" options="-parameters" />
+      <module name="TicketProducer.test" options="-parameters" />
+      <module name="untitled" options="-parameters" />
+      <module name="untitled.main" options="-parameters" />
+      <module name="untitled.test" options="-parameters" />
+    </option>
+  </component>
+</project>

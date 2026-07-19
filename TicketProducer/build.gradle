@@ -1,0 +1,36 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.3.1' // 버전을 3.3.x 이상으로 올려줍니다
+    id 'io.spring.dependency-management' version '1.1.6' // 최신 그레이들과 호환되는 버전으로 올립니다
+}
+
+group = 'org.example'
+version = '1.0-SNAPSHOT'
+
+java {
+    sourceCompatibility = '17' // 사용하시는 자바 버전에 맞게 수정하세요 (17 또는 21 추천)
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:6.0.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // 1. 스프링 웹 (Producer에서 REST API 만들 때 필요)
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // 2. 스프링 카프카 (핵심 연동 라이브러리)
+    implementation 'org.springframework.kafka:spring-kafka'
+
+    // 3. 롬복 (Lombok - @RequiredArgsConstructor 등 사용 시 편리)
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+}
+
+test {
+    useJUnitPlatform()
+}
