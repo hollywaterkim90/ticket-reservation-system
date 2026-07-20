@@ -1,10 +1,27 @@
 server:
-  port: 8080
+  port: 8081 # 포트 중복 충돌 방지
 
 spring:
   kafka:
-    bootstrap-servers: localhost:9092
-  # 레디스 설정 추가
+    bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
+    consumer:
+      group-id: ticket-payment-group
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+    # 💡 결제 완료 후 최종 토픽 발행을 위한 고신뢰 프로듀서 설정
+    producer:
+      acks: all # min.insync.replicas=2
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        enable.idempotence: true # 멱등성 프로듀서 활성화 (중복 전송 차단)
+        max.in.flight.requests.per.connection: 5
+
+  elasticsearch:
+    uris: http://localhost:9200
+
   data:
     redis:
       host: localhost

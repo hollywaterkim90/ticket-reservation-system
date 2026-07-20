@@ -4,19 +4,10 @@ server:
 spring:
   kafka:
     bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
-    consumer:
-      group-id: ticket-group-es
-      auto-offset-reset: latest
-
-    # 💡 Consumer 프로젝트 내부에 멱등성 프로듀서 설정 추가
     producer:
-      acks: all # 모든 복제본(Follower)까지 적재 확인
-      properties:
-        enable.idempotence: true # 멱등성 프로듀서 활성화 (중복 전송 차단)
-        max.in.flight.requests.per.connection: 5 # 순서 보장 및 멱등성 필수 옵션
-
-  elasticsearch:
-    uris: http://localhost:9200
+      acks: 1 # 리더 브로커 적재만 확인 (고속 처리)
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
   data:
     redis:

@@ -21,18 +21,30 @@ public class TicketConsumerListener {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final TicketReservationElasticRepository repository;
 
-    @KafkaListener(topics = "ticket-reservations", groupId = "ticket-group-es")
-    public void consume(String message) {
+    @KafkaListener(topics = "ticket-reservations", groupId = "ticket-group-payment-worker")
+    public void consumeReservation(String message) {
+        try {
+            JsonNode jsonNode = objectMapper.readTree(message);
+            String userId = jsonNode.get("userId").asText();
+
+            log.info("[결제 파이프라인 수신] 중복/유실 없는 안전 구간 진입 완료. 유저: {}", userId);
+
+            // TODO: 💳 외부 결제 API 연동이 발생하는 무거운 비즈니스 로직 구간
+            log.info("💳 [결제 승인 중...] 외부PG사 연동 처리 중... 유저: {}", userId);
+
+            // 결제 성공 시 2차 최종 확정 토픽으로 발행 (acks=all 작동)
+            kafkaTemplate.send("ticket-payments", message);
+        } catch (Exception e) {
+            log.error("❌ 데이터 처리 중 에러 발생: {}", e.getMessage(), e);
+        }
+    }
+
+    @KafkaListener(topics = "ticket-payments", groupId = "ticket-group-es-indexer")
+    public void consumePaymentConfirm(String message) {
         try {
             JsonNode jsonNode = objectMapper.readTree(message);
             String userId = jsonNode.get("userId").asText();
             String ticketId = jsonNode.get("ticketId").asText();
-
-            log.info("[결제 파이프라인 수신] 중복/유실 없는 안전 구간 진입 완료. 유저: {}", userId);
-
-            // 💳 외부 결제 API 연동 혹은 실제 DB 트랜잭션이 발생하는 무거운 비즈니스 로직 구간
-            // (여기서는 로그로 대체하고 바로 ES에 적재합니다.)
-            log.info("💳 [결제 승인 중...] 외부PG사 연동 처리 중... 유저: {}", userId);
 
             // 최종 성공 데이터만 무거운 저장소인 Elasticsearch에 안전하게 안착
             TicketReservationDocument document = new TicketReservationDocument(userId, ticketId);

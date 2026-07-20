@@ -1,4 +1,4 @@
-package org.example.Service;
+package org.example.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,11 +46,12 @@ public class TicketSerivce {
         }
 
         // 3. 앞서 작성한 카프카 전송 로직 (동기 방식 예시)
+        // 통과 시 1차 토픽으로 고속 발행 (acks=1 설정 활성화)
         try {
             String message = String.format("{\"ticketId\":\"%s\",\"userId\":\"%s\"}", ticketId, userId);
             kafkaTemplate.send("ticket-reservations", message).get();
 
-            return ResponseEntity.ok("티켓 예약 요청이 성공적으로 접수되었습니다.");
+            return ResponseEntity.ok("선착순 통과! 결제 대기열에 진입했습니다.");
         } catch (Exception e) {
             log.error("❌ 카프카 전송 실패: {}", e.getMessage());
             return ResponseEntity.internalServerError().body("시스템 오류로 예약 요청에 실패했습니다.");
