@@ -2,9 +2,13 @@
 
 1. ticket-reservations, ticket-payments 토픽 생성 (Partitions: 3, Replication Factor: 3)
 
-docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --create --topic ticket-reservations --partitions 3 --replication-factor 3
+docker exec -it kafka-1 kafka-topics \
+--bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 \
+--create --topic ticket-reservations --partitions 3 --replication-factor 3
 
-docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --create --topic ticket-payments --partitions 3 --replication-factor 3
+docker exec -it kafka-1 kafka-topics \
+--bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 \
+--create --topic ticket-payments --partitions 3 --replication-factor 3
 
 
 ## 토픽 생성 확인
