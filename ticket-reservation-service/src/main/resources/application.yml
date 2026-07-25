@@ -8,6 +8,7 @@ spring:
       acks: 1 # 리더 브로커 적재만 확인 (고속 처리)
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      
 
   data:
     redis:

@@ -9,6 +9,15 @@ spring:
       auto-offset-reset: latest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # poll() 호출 간격의 최대 기간
+      max.poll.interval.ms: 10000
+      max.poll.records: 50
+      # 컨슈머 헬스체크(Heartbeat) 세션 타임아웃
+      session.timeout.ms: 45000
+      heartbeat.interval.ms: 15000
+    listener:
+      type: batch
+
 
     # 💡 결제 완료 후 최종 토픽 발행을 위한 고신뢰 프로듀서 설정
     producer:

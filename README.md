@@ -24,7 +24,13 @@ docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --topic t
 
 
 ## 대용량 테스트
-ab -n 10000 -c 100 -p /dev/null -T "application/x-www-form-urlencoded" "http://localhost:8080/reserve?userId=user_test&ticketId=concert_01"
+
+# user1부터 user100까지 100건의 요청을 백그라운드(&)로 동시에 발사
+for i in {1..100}; do
+curl -X POST "http://localhost:8080/reserve" \
+-d "userId=user$i&ticketId=ticket01" &
+done
+wait
 
 
 ## 적재 테스트
