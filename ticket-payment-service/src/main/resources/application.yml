@@ -4,20 +4,6 @@ server:
 spring:
   kafka:
     bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
-    consumer:
-      group-id: ticket-payment-group
-      auto-offset-reset: latest
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      # poll() 호출 간격의 최대 기간
-      max.poll.interval.ms: 10000
-      max.poll.records: 50
-      # 컨슈머 헬스체크(Heartbeat) 세션 타임아웃
-      session.timeout.ms: 45000
-      heartbeat.interval.ms: 15000
-    listener:
-      type: batch
-
 
     # 💡 결제 완료 후 최종 토픽 발행을 위한 고신뢰 프로듀서 설정
     producer:
@@ -27,6 +13,33 @@ spring:
       properties:
         enable.idempotence: true # 멱등성 프로듀서 활성화 (중복 전송 차단)
         max.in.flight.requests.per.connection: 5
+
+
+    consumer:
+      group-id: ticket-payment-group
+      auto-offset-reset: latest
+
+      # 1. ErrorHandlingDeserializer를 래퍼(Wrapper)로 설정
+      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+
+      # max.poll 관련 장애 연출 설정 유지
+      max.poll.interval.ms: 10000
+      max.poll.records: 50
+      session.timeout.ms: 45000
+      heartbeat.interval.ms: 15000
+
+      properties:
+        # 2. 실제 사용할 내부 Deserializer 지정
+        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+
+        # 3. JSON 역직렬화 허용 패키지 및 DTO 지정
+        spring.json.trusted.packages: "*"
+        spring.json.value.default.type: org.example.dto.TicketReservationDto
+
+    listener:
+      type: batch
 
   elasticsearch:
     uris: http://localhost:9200

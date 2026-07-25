@@ -6,7 +6,7 @@ version: '3.8'
 services:
   # --- Kafka Broker 1 ---
   kafka-1:
-    image: confluentinc/cp-kafka:7.4.0
+    image: confluentinc/cp-kafka:${KAFKA_VERSION}
     container_name: kafka-1
     ports:
       - "9092:19092"
@@ -31,7 +31,7 @@ services:
 
   # --- Kafka Broker 2 ---
   kafka-2:
-    image: confluentinc/cp-kafka:7.4.0
+    image: confluentinc/cp-kafka:${KAFKA_VERSION}
     container_name: kafka-2
     ports:
       - "9093:19093"
@@ -54,7 +54,7 @@ services:
 
   # --- Kafka Broker 3 ---
   kafka-3:
-    image: confluentinc/cp-kafka:7.4.0
+    image: confluentinc/cp-kafka:${KAFKA_VERSION}
     container_name: kafka-3
     ports:
       - "9094:19094"
@@ -75,6 +75,32 @@ services:
       KAFKA_MIN_INSYNC_REPLICAS: 2
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
 
+
+  # 🚀 토픽 자동 생성을 위한 Init 컨테이너
+  init-kafka:
+    image: confluentinc/cp-kafka:${KAFKA_VERSION}
+    depends_on:
+      - kafka-1
+      - kafka-2
+      - kafka-3
+    command:
+      - /bin/sh
+      - -c
+      - |
+        echo "⏳ Waiting for Kafka brokers to be ready..."
+
+        until kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --list > /dev/null 2>&1; do
+          echo "Kafka is not ready yet... sleeping 2s"
+          sleep 2
+        done
+
+        echo "🚀 Creating kafka topics..."
+        kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --create --if-not-exists --topic ticket-reservations --partitions 3 --replication-factor 3
+        kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --create --if-not-exists --topic ticket-payments --partitions 3 --replication-factor 3
+
+        echo "✅ Successfully created topics:"
+        kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --list
+
   # kafka ui
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -92,7 +118,7 @@ services:
 
   # 2. 엘라스틱서치 (검색/저장 엔진)
   local-elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTICSEARCH_VERSION}
     container_name: local-elasticsearch
     ports:
       - "9200:9200"
@@ -104,7 +130,7 @@ services:
 
   # 3. 키바나 (시각화 툴)
   local-kibana:
-    image: docker.elastic.co/kibana/kibana:8.11.1
+    image: docker.elastic.co/kibana/kibana:${ELASTICSEARCH_VERSION}
     container_name: local-kibana
     ports:
       - "5601:5601"

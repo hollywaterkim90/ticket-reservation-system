@@ -34,6 +34,8 @@ public class TicketConsumerListener {
                 log.info("💳 [결제] PG사 연동 처리 중... 유저: {}", event.getUserId());
                 Thread.sleep(5000);
 
+                // 임의의 order id
+                event.setOrderId(String.format("%s:%s", event.getTicketId(), event.getUserId()));
                 // 결제 성공 시 2차 최종 확정 토픽으로 발행 (acks=all 작동)
                 kafkaTemplate.send("ticket-payments", event);
             } catch (Exception e) {
@@ -44,7 +46,7 @@ public class TicketConsumerListener {
 
     @KafkaListener(topics = "ticket-payments", groupId = "ticket-group-es-indexer")
     public void consumeBatch(List<ConsumerRecord<String, TicketReservationDto>> records) {
-        log.info("📦 [Kafka Batch Received] 수신된 메시지 수: {}건", records.size());
+        log.info("📦 consumeBatch [Kafka Batch Received] 수신된 메시지 수: {}건", records.size());
 
         List<TicketReservationDocument> documents = records.stream()
                 .map(record -> {
