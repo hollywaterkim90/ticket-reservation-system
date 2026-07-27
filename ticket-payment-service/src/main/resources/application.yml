@@ -4,17 +4,6 @@ server:
 spring:
   kafka:
     bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
-
-    # 💡 결제 완료 후 최종 토픽 발행을 위한 고신뢰 프로듀서 설정
-    producer:
-      acks: all # min.insync.replicas=2
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
-      properties:
-        enable.idempotence: true # 멱등성 프로듀서 활성화 (중복 전송 차단)
-        max.in.flight.requests.per.connection: 5
-
-
     consumer:
       group-id: ticket-payment-group
       auto-offset-reset: latest
@@ -23,13 +12,19 @@ spring:
       key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
 
-      # max.poll 관련 장애 연출 설정 유지
-      max.poll.interval.ms: 10000
-      max.poll.records: 50
-      session.timeout.ms: 45000
-      heartbeat.interval.ms: 15000
+      # Spring Kafka 컨슈머 기본 옵션 (케밥 케이스 적용)
+      max-poll-interval-ms: 15000
+      max-poll-records: 50
+      session-timeout-ms: 45000
+      heartbeat-interval-ms: 15000
 
       properties:
+        # Kafka Client Native 옵션 (확실한 주입을 위해 하단에도 명시)
+        max.poll.interval.ms: 15000
+        max.poll.records: 50
+        session.timeout.ms: 45000
+        heartbeat.interval.ms: 15000
+
         # 2. 실제 사용할 내부 Deserializer 지정
         spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
         spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
@@ -38,8 +33,19 @@ spring:
         spring.json.trusted.packages: "*"
         spring.json.value.default.type: org.example.dto.TicketReservationDto
 
-    listener:
-      type: batch
+      listener:
+        type: batch # single(기본값) 대신 batch로 설정
+
+    # 💡 결제 완료 후 최종 토픽 발행을 위한 고신뢰 프로듀서 설정
+    producer:
+      acks: all # min.insync.replicas=2
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        # 헤더에 DTO 패키지/클래스 정보 포함 (Consumer가 참고하여 변환 가능)
+        spring.json.add.type.headers: true
+        enable.idempotence: true # 멱등성 프로듀서 활성화 (중복 전송 차단)
+        max.in.flight.requests.per.connection: 5
 
   elasticsearch:
     uris: http://localhost:9200
@@ -48,3 +54,17 @@ spring:
     redis:
       host: localhost
       port: 6379
+
+
+
+
+logging:
+  level:
+    # 1. Config 찍히는 지저분한 내부 로그는 계속 WARN으로 숨김
+    org.apache.kafka.clients.producer.ProducerConfig: WARN
+    org.apache.kafka.clients.consumer.ConsumerConfig: WARN
+    org.apache.kafka.clients.admin.AdminClientConfig: WARN
+
+    # 2. ⚡ 리밸런싱 및 파티션 할당 과정을 상세히 보기 위해 INFO로 유지
+    org.apache.kafka.clients.consumer.internals.ConsumerCoordinator: INFO
+    org.springframework.kafka.listener.KafkaMessageListenerContainer: INFO

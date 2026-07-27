@@ -16,7 +16,7 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class TicketService {
 
-    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final KafkaTemplate<String, TicketReservationDto> kafkaTemplate;
     private final StringRedisTemplate redisTemplate;
 
     public ResponseEntity<String> sendToReservationTopic(String userId, String ticketId) {
@@ -36,8 +36,8 @@ public class TicketService {
         // 3. 앞서 작성한 카프카 전송 로직 (동기 방식 예시)
         // 통과 시 1차 토픽으로 고속 발행 (acks=1 설정 활성화)
         try {
-            String message = String.format("{\"ticketId\":\"%s\",\"userId\":\"%s\"}", ticketId, userId);
-            kafkaTemplate.send("ticket-reservations", message).get();
+            log.info("send message: {}", dto.getUserId());
+            kafkaTemplate.send("ticket-reservations", dto);
 
             return ResponseEntity.ok("선착순 통과! 결제 대기열에 진입했습니다.");
         } catch (Exception e) {

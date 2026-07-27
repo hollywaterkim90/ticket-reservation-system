@@ -7,8 +7,12 @@ spring:
     producer:
       acks: 1 # 리더 브로커 적재만 확인 (고속 처리)
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
-      
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+      properties:
+        # 헤더에 DTO 패키지/클래스 정보 포함 (Consumer가 참고하여 변환 가능)
+        spring.json.add.type.headers: true
+
 
   data:
     redis:
