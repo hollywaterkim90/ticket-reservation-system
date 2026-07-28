@@ -1,3 +1,5 @@
+# 카프카 대용량 트래픽 상황 재현 및 해결
+
 ## 어플리케이션 시작 전 토픽 생성
 
 1. ticket-reservations, ticket-payments 토픽 생성 (Partitions: 3, Replication Factor: 3)
