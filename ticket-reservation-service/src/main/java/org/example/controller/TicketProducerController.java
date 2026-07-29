@@ -1,6 +1,7 @@
 package org.example.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.example.dto.TicketReservationDto;
 import org.example.service.TicketService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,7 +15,7 @@ public class TicketProducerController {
     private final TicketService ticketSerivce;
 
     @PostMapping("/reserve")
-    public ResponseEntity<String> reserveTicket(@RequestParam String userId, @RequestParam String ticketId) {
-        return ticketSerivce.sendToReservationTopic(userId, ticketId);
+    public ResponseEntity<String> reserveTicket(@RequestParam TicketReservationDto dto) {
+        return ticketSerivce.sendToReservationTopic(dto);
     }
 }

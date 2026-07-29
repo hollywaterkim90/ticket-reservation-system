@@ -1,7 +1,9 @@
 package org.example.service;
 
+import io.hypersistence.tsid.TSID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.dto.PaymentStatus;
 import org.example.dto.TicketReservationDto;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
@@ -18,26 +20,27 @@ public class TicketService {
 
     private final KafkaTemplate<String, TicketReservationDto> kafkaTemplate;
     private final StringRedisTemplate redisTemplate;
+    final String stockKey = "ticket:stock:god";
 
-    public ResponseEntity<String> sendToReservationTopic(String userId, String ticketId) {
-        TicketReservationDto dto = TicketReservationDto.builder().userId(userId).ticketId(ticketId).build();
-
-        // 💡 [자동화] Redis에 재고 키가 없으면 초기값(예: 10개)으로 세팅
-        // TODO: 어드민 페이지에서 재고 추가하도록.
-        String stockKey = String.format("ticket:%s:stock", ticketId);
-        redisTemplate.opsForValue().setIfAbsent(stockKey, "100");
+    public ResponseEntity<String> sendToReservationTopic(TicketReservationDto requestDto) {
+        String userKey = String.format("user:%s", requestDto.getUserId());
 
         // 1. 중복 예약 체크
-//        checkDuplicate(dto);
+        checkDuplicate(userKey);
 
-        // 2. 선착순 재고 차감 (Redis DECR)
-        checkFirstComeFirstServed(stockKey, dto);
+        // 2. Redis에 임시 상태 저장. (유저가 현재 결제 진행 상태 조회용, TTL 10분)
+        redisTemplate.opsForValue().set(userKey, PaymentStatus.PENDING.name(), Duration.ofMinutes(10));
 
-        // 3. 앞서 작성한 카프카 전송 로직 (동기 방식 예시)
-        // 통과 시 1차 토픽으로 고속 발행 (acks=1 설정 활성화)
+        // 3. 선착순 재고 차감
+        checkFirstComeFirstServed();
+
+        // 4. Kafka 메시지 생성 (status: PENDING)
+        requestDto.setOrderId(TSID.Factory.getTsid().toString());
+        requestDto.setStatus(PaymentStatus.PENDING.name());
         try {
-            log.info("send message: {}", dto.getUserId());
-            kafkaTemplate.send("ticket-reservations", dto);
+            log.info("send message: user: {}, orderId: {}", requestDto.getUserId(), requestDto.getOrderId());
+            // 통과 시 1차 토픽으로 고속 발행 (acks=1 설정 활성화)
+            kafkaTemplate.send("ticket-reservations", requestDto);
 
             return ResponseEntity.ok("선착순 통과! 결제 대기열에 진입했습니다.");
         } catch (Exception e) {
@@ -46,10 +49,9 @@ public class TicketService {
         }
     }
 
-    private void checkDuplicate(TicketReservationDto dto) {
+    private void checkDuplicate(String userKey) {
         // 1. 1인 1매 중복 예약 방지 (Redis SetIfAbsent)
-        String redisKey = String.format("ticket:%s:user:%s", dto.getTicketId(), dto.getUserId());
-        Boolean isFirstRequest = redisTemplate.opsForValue().setIfAbsent(redisKey, "reserved", Duration.ofHours(1));
+        Boolean isFirstRequest = redisTemplate.opsForValue().setIfAbsent(userKey, PaymentStatus.PENDING.name(), Duration.ofMinutes(10));
 
         if (Boolean.FALSE.equals(isFirstRequest)) {
             log.warn("[중복 예약 거부] 이미 신청한 유저입니다. 유저: {}, 티켓: {}", dto.getUserId(), dto.getTicketId());
@@ -59,13 +61,11 @@ public class TicketService {
         }
     }
 
-    private void checkFirstComeFirstServed(String stockKey, TicketReservationDto dto) {
+    private void checkFirstComeFirstServed() {
         Long remainStock = redisTemplate.opsForValue().decrement(stockKey);
 
         if (remainStock == null || remainStock < 0) {
-            log.warn("[선착순 마감 실패] 재고가 모두 소진되었습니다. 유저: {}, 티켓: {}", dto.getUserId(), dto.getTicketId());
-            // 400 Bad Request 또는 422 Unprocessable Entity가 적절합니다.
-            redisTemplate.opsForValue().setIfPresent(stockKey, "100");
+            log.warn("[선착순 마감] 재고가 모두 소진되었습니다. 100개 추가.");
             ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body("티켓 재고가 모두 소진되어 예약이 마감되었습니다.");
         }
