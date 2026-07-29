@@ -54,7 +54,7 @@ public class TicketService {
         Boolean isFirstRequest = redisTemplate.opsForValue().setIfAbsent(userKey, PaymentStatus.PENDING.name(), Duration.ofMinutes(10));
 
         if (Boolean.FALSE.equals(isFirstRequest)) {
-            log.warn("[중복 예약 거부] 이미 신청한 유저입니다. 유저: {}, 티켓: {}", dto.getUserId(), dto.getTicketId());
+            log.warn("[중복 예약 거부] 이미 신청한 유저입니다. 유저: {}", userKey);
             // 409 Conflict 또는 400 Bad Request가 적절합니다.
             ResponseEntity.status(HttpStatus.CONFLICT)
                     .body("이미 예약을 신청하셨습니다. (1인 1매만 가능)");
