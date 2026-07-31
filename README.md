@@ -25,7 +25,8 @@ docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --topic t
 # user1부터 user100까지 100건의 요청을 백그라운드(&)로 동시에 발사
 for i in {1..100}; do
 curl -X POST "http://localhost:8080/reserve" \
--d "userId=user$i&ticketId=ticket01" &
+-H "Content-Type: application/json" \
+-d "{\"userId\":\"user$i\", \"ticketId\":\"ticket01\"}" &
 done
 wait
 
