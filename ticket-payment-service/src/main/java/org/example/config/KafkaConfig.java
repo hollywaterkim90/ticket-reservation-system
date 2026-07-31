@@ -1,28 +1,49 @@
 package org.example.config;
 
-import org.example.dto.TicketReservationDto;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 
-@EnableKafka
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.support.serializer.JsonDeserializer;
+
+import java.util.HashMap;
+import java.util.Map;
+
 @Configuration
+@EnableKafka
 public class KafkaConfig {
 
-    @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, TicketReservationDto> kafkaListenerContainerFactory(
-            ConsumerFactory<String, TicketReservationDto> consumerFactory) {
+    @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
+    private String bootstrapServers;
 
-        ConcurrentKafkaListenerContainerFactory<String, TicketReservationDto> factory =
+    @Bean
+    public ConsumerFactory<String, Object> consumerFactory() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
+        props.put(JsonDeserializer.TRUSTED_PACKAGES, "*"); // JSON 역직렬화 허용 패키지
+
+        return new DefaultKafkaConsumerFactory<>(props);
+    }
+
+    @Bean(name = "manualAckKafkaListenerContainerFactory")
+    public ConcurrentKafkaListenerContainerFactory<String, Object> manualAckKafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, Object> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
 
-        factory.setConsumerFactory(consumerFactory);
+        factory.setConsumerFactory(consumerFactory());
+        factory.setBatchListener(true); // List<TicketReservationDto> 배치를 받기 위해 필수!
 
-        // ⚡ 2. 배치 리스너(Batch Listener) 강제 활성화!
-        // 이 옵션이 켜져야 List<TicketReservationDto> 수신 시 max.poll.records 만큼 묶어서 들고옵니다.
-        factory.setBatchListener(true);
+        // 💡 수동 Ack(MANUAL_IMMEDIATE) 모드 설정
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
 
         return factory;
     }

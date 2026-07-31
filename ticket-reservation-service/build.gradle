@@ -2,16 +2,17 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.3.1' // 버전을 3.3.x 이상으로 올려줍니다
     id 'io.spring.dependency-management' version '1.1.6'
-    id 'org.jetbrains.kotlin.jvm' // 최신 그레이들과 호환되는 버전으로 올립니다
 }
 
 group = 'org.example'
 version = '1.0-SNAPSHOT'
 
 java {
-    // 사용하시는 자바 버전에 맞게 수정하세요 (17 또는 21 추천)
+    // Java 17 툴체인 명시 (컴파일러 및 언어 레벨 고정)
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
 }
-
 repositories {
     mavenCentral()
 }
@@ -31,13 +32,8 @@ dependencies {
     // Spring Data Elasticsearch 추가
     implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
-    implementation 'io.hypersistence:hypersistence-tsid:2.1.1'
 }
 
 test {
     useJUnitPlatform()
-}
-kotlin {
-    jvmToolchain(17)
 }
