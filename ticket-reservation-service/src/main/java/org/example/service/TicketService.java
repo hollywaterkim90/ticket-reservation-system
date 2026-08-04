@@ -65,7 +65,7 @@ public class TicketService {
         Long remainStock = redisTemplate.opsForValue().decrement(stockKey);
 
         if (remainStock == null || remainStock < 0) {
-            log.warn("[선착순 마감] 재고가 모두 소진되었습니다.");
+            log.warn("[선착순 마감] 재고가 모두 소진되었습니다. {}", stockKey);
             ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body("티켓 재고가 모두 소진되어 예약이 마감되었습니다.");
         }

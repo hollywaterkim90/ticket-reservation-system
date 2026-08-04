@@ -16,7 +16,7 @@ public class RedisDataInitializer {
 
     @EventListener(ApplicationReadyEvent.class)
     public void init() {
-        redisTemplate.opsForValue().setIfAbsent("ticket:stock:god", "100");
+        redisTemplate.opsForValue().set("ticket:stock:god", "10000");
         log.info("🚀 [ApplicationReadyEvent] 모든 준비 완료 후 Redis 초기 재고 세팅!");
     }
 }

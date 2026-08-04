@@ -71,12 +71,12 @@ public class TicketConsumerListener {
         try {
             // 🧪 테스트용: 특정 유저 지연 재현 (3초 + 5초 = 총 8초 대기 -> 5초 타임아웃 걸림)
             Thread.sleep(5000);
-            if (Objects.equals(event.getUserId(), "5000") || Objects.equals(event.getUserId(), "4000")) {
+            if (Objects.equals(event.getUserId(), "100") || Objects.equals(event.getUserId(), "200")) {
                 Thread.sleep(5000);
             }
 
             // 🧪 테스트용: 특정 조건일 때 일반 비즈니스/시스템 예외 발생 가상 재현
-            if (Objects.equals(event.getUserId(), "9999")) {
+            if (Objects.equals(event.getUserId(), "300")) {
                 throw new IllegalStateException("PG사 잔액 부족 또는 카드 정보 오류");
             }
 

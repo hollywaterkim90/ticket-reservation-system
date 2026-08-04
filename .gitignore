@@ -19,3 +19,6 @@ bin/
 
 # Logs
 *.log
+
+# Environment
+.env
