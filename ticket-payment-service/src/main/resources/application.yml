@@ -1,13 +1,13 @@
 server:
-  port: 8081 # 포트 중복 충돌 방지
+  port: 8082 # 포트 중복 충돌 방지
 
 # 💡 컨슈머 그룹 ID 중앙 관리
 custom:
   kafka:
     groups:
-      payment: ticket-group-payment-worker-v2 # 결제 처리용 그룹
-      indexer: ticket-group-es-indexer-v2     # ES 색인용 그룹
-      dlq: ticket-dlq-group-v2                # DLQ 처리용 그룹
+      payment: ticket-group-payment-worker# 결제 처리용 그룹
+      indexer: ticket-group-es-indexer     # ES 색인용 그룹
+      dlq: ticket-dlq-group                # DLQ 처리용 그룹
 
 spring:
   kafka:
