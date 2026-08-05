@@ -46,7 +46,7 @@ public class TicketConsumerListener {
                         processPaymentWithTimeout(event, batchId);
                     }, paymentExecutor)
                     // 💡 2. 타임아웃 설정 (5초 경과 시 TimeoutException)
-                    .orTimeout(5, TimeUnit.SECONDS)
+                    .orTimeout(3, TimeUnit.SECONDS)
                     // 💡 3. 비동기 작업 중 에러/타임아웃 발생 시 콜백
                     .exceptionally(ex -> {
                         Throwable cause = (ex instanceof CompletionException) ? ex.getCause() : ex;
