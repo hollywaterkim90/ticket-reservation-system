@@ -5,7 +5,7 @@ server:
 custom:
   kafka:
     groups:
-      payment: ticket-group-payment-worker# 결제 처리용 그룹
+      payment: ticket-group-payment-worker # 결제 처리용 그룹
       indexer: ticket-group-es-indexer     # ES 색인용 그룹
       dlq: ticket-dlq-group                # DLQ 처리용 그룹
 
