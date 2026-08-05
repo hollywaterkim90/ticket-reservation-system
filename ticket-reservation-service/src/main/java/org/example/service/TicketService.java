@@ -38,7 +38,7 @@ public class TicketService {
         requestDto.setOrderId(TSID.Factory.getTsid().toString());
         requestDto.setStatus(PaymentStatus.PENDING.name());
         try {
-            log.info("send message: user: {}, orderId: {}", requestDto.getUserId(), requestDto.getOrderId());
+            log.info("send message: user: {}, remainStock: {}, orderId: {}", requestDto.getUserId(), redisTemplate.opsForValue().get("ticket:stock:god"), requestDto.getOrderId());
             // 통과 시 1차 토픽으로 고속 발행 (acks=1 설정 활성화)
             kafkaTemplate.send("ticket-reservations", requestDto);
 

@@ -33,7 +33,7 @@ public class TicketConsumerListener {
     // PG 결제 전용 비동기 스레드 풀 (CPU 코어 수 고려하여 설정)
     private final ExecutorService paymentExecutor = Executors.newFixedThreadPool(50);
 
-    @KafkaListener(topics = "ticket-reservations", groupId = "ticket-group-payment-worker",
+    @KafkaListener(topics = "ticket-reservations", groupId = "${custom.kafka.groups.payment}",
             containerFactory = "manualAckKafkaListenerContainerFactory")
     public void consumeReservation(List<TicketReservationDto> records, Acknowledgment ack) {
         log.info("📦 [Batch Received] 비동기 수신 메시지 수: {}건", records.size());
@@ -96,7 +96,7 @@ public class TicketConsumerListener {
         log.info("🎉 [결제 완료] 유저: {}", event.getUserId());
     }
 
-    @KafkaListener(topics = "ticket-payments", groupId = "ticket-group-es-indexer")
+    @KafkaListener(topics = "ticket-payments", groupId = "${custom.kafka.groups.indexer}")
     public void consumeBatch(List<TicketReservationDto> records) {
         List<TicketReservationDocument> documents = records.stream()
                 .filter(Objects::nonNull)
@@ -114,7 +114,7 @@ public class TicketConsumerListener {
 
     // 🚨 지연/실패 건을 DLQ 토픽으로 이관하고 보상 트랜잭션 및 실패 이벤트를 처리하는 메서드
     private void sendToDlq(TicketReservationDto event, String reason) {
-        String stockKey = String.format("ticket:stock:%s", event.getTicketId());
+        String stockKey = "ticket:stock:god";
         String statusKey = String.format("order:status:%s", event.getOrderId());
 
         log.warn("🚨 [DLQ 이관 및 보상 트랜잭션 시작] userId: {}, OrderID: {} (사유: {})",

@@ -41,8 +41,8 @@ public class KafkaConfig {
         factory.setConsumerFactory(consumerFactory());
         factory.setBatchListener(true); // List<TicketReservationDto> 배치를 받기 위해 필수!
 
-        // 💡 수동 Ack(MANUAL_IMMEDIATE) 모드 설정
-        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+        // 💡 수동 Ack(MANUAL) 모드 설정
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
 
         return factory;
     }

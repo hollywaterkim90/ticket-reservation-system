@@ -16,7 +16,7 @@ public class TicketDlqListner {
 
     private final StringRedisTemplate redisTemplate;
 
-    @KafkaListener(topics = "ticket-reservations.DLQ", groupId = "ticket-dlq-group")
+    @KafkaListener(topics = "ticket-reservations.DLQ", groupId = "${custom.kafka.groups.dlq}")
     public void consumeDlq(TicketReservationDto event, Acknowledgment ack) {
         log.error("🚨 [DLQ 포착] 3회 재시도 실패! Poison Pill 메시지 격리 - OrderID: {}", event.getOrderId());
 

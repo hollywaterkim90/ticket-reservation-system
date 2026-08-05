@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -16,7 +17,13 @@ public class RedisDataInitializer {
 
     @EventListener(ApplicationReadyEvent.class)
     public void init() {
-        redisTemplate.opsForValue().set("ticket:stock:god", "10000");
+        // 1. 현재 Redis DB의 모든 키 삭제
+        redisTemplate.execute((RedisCallback<Object>) connection -> {
+            connection.serverCommands().flushDb();
+            return null;
+        });
+
+        redisTemplate.opsForValue().set("ticket:stock:god", "495");
         log.info("🚀 [ApplicationReadyEvent] 모든 준비 완료 후 Redis 초기 재고 세팅!");
     }
 }
