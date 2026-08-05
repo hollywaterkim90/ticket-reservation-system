@@ -28,8 +28,6 @@ public class TicketConsumerListener {
     private final StringRedisTemplate redisTemplate;
     private final KafkaTemplate<String, TicketReservationDto> kafkaTemplate;
     private final TicketReservationElasticRepository repository;
-
-    // PG 결제 전용 비동기 스레드 풀
     private final ExecutorService paymentExecutor = Executors.newFixedThreadPool(50);
 
     @KafkaListener(topics = "ticket-reservations", groupId = "${custom.kafka.groups.payment}",
@@ -45,16 +43,14 @@ public class TicketConsumerListener {
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                         processPaymentWithTimeout(event, batchId);
                     }, paymentExecutor)
-                    // 💡 2. 타임아웃 설정 (5초 경과 시 TimeoutException)
                     .orTimeout(3, TimeUnit.SECONDS)
-                    // 💡 3. 비동기 작업 중 에러/타임아웃 발생 시 콜백
                     .exceptionally(ex -> {
                         Throwable cause = (ex instanceof CompletionException) ? ex.getCause() : ex;
 
                         log.error("💥 [{}] [결제 실패] OrderID: {}, UserId: {}, Cause: {}",
                                 batchId, event.getOrderId(), event.getUserId(), cause.getMessage());
 
-                        // DLQ 이관 주석 해제하여 실제 보상 트랜잭션 진행
+                        // DLQ 이관 및 보상 트랜잭션
                         sendToDlq(event, cause.getMessage());
                         return null;
                     });
@@ -62,7 +58,7 @@ public class TicketConsumerListener {
             futures.add(future);
         }
 
-        // 🚀 4. 배치 내의 모든 비동기 작업 수습 후 오프셋 커밋
+        // 🚀 4.  수동 커밋
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
                 .thenRun(() -> {
                     // 🧪 [멱등성 테스트용 가상 에러 삽입]
@@ -109,12 +105,10 @@ public class TicketConsumerListener {
             throw new RuntimeException(e.getMessage(), e);
         }
 
-        // 성공 로직
         event.setStatus(PaymentStatus.SUCCESS.name());
         redisTemplate.opsForValue().set(statusKey, PaymentStatus.SUCCESS.name());
 
         kafkaTemplate.send("ticket-payments", event.getUserId(), event);
-//        log.info("🎉 [결제 완료] 유저: {}, OrderID: {}", event.getUserId(), event.getOrderId());
     }
 
     @KafkaListener(topics = "ticket-payments", groupId = "${custom.kafka.groups.indexer}")
@@ -140,13 +134,15 @@ public class TicketConsumerListener {
 
         // 1. DTO 상태 변경 (FAILURE)
         event.setStatus(PaymentStatus.FAILURE.name());
+        event.setErrorMessage(reason);
 
         // 2. Redis 상태 변경 & 보상 트랜잭션 (선점했던 재고 원복)
         redisTemplate.opsForValue().set(statusKey, PaymentStatus.FAILURE.name());
         Long restoredStock = redisTemplate.opsForValue().increment(stockKey);
 
         // 3. DLQ 토픽 및 실패 이벤트 발행
-        kafkaTemplate.send("ticket-reservations.DLQ", event.getUserId(), event);
+        kafkaTemplate.send("ticket-reservations.DLQ"
+                , String.format("userId:%s:orderId:%s", event.getUserId(), event.getOrderId()), event);
         kafkaTemplate.send("ticket-payments", event.getUserId(), event);
 
         log.info("🚨 [DLQ 이관 & 보상완료] OrderID: {}, UserId: {}, 원복된 재고: {}",
