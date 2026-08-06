@@ -16,10 +16,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.UUID;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -30,74 +28,100 @@ public class TicketConsumerListener {
     private final StringRedisTemplate redisTemplate;
     private final KafkaTemplate<String, TicketReservationDto> kafkaTemplate;
     private final TicketReservationElasticRepository repository;
-    // PG 결제 전용 비동기 스레드 풀 (CPU 코어 수 고려하여 설정)
     private final ExecutorService paymentExecutor = Executors.newFixedThreadPool(50);
+    private final int asyncTimeoutSec = 3;
 
-    @KafkaListener(topics = "ticket-reservations", groupId = "ticket-group-payment-worker",
+    @KafkaListener(topics = "ticket-reservations", groupId = "${custom.kafka.groups.payment}",
             containerFactory = "manualAckKafkaListenerContainerFactory")
     public void consumeReservation(List<TicketReservationDto> records, Acknowledgment ack) {
-        log.info("📦 [Batch Received] 비동기 수신 메시지 수: {}건", records.size());
+        log.info("📦 [consumeReservation] 비동기 수신 메시지 수: {}건", records.size());
 
+        String batchId = UUID.randomUUID().toString().substring(0, 8);
         List<CompletableFuture<Void>> futures = new ArrayList<>();
 
         for (TicketReservationDto event : records) {
             // 🚀 1. 비동기 스레드 풀로 결제 작업 이관
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-                        processPaymentWithTimeout(event);
+                        processPaymentWithTimeout(event, batchId);
                     }, paymentExecutor)
-                    // 💡 2. 타임아웃 설정 (예: 3초 넘어가면 TimeoutException 발생시켜 비동기 멈춤)
-                    .orTimeout(5, TimeUnit.SECONDS)
-                    // 💡 3. 비동기 작업 중 에러/타임아웃 발생 시 DLQ 이관 콜백
+                    .orTimeout(asyncTimeoutSec, TimeUnit.SECONDS)
                     .exceptionally(ex -> {
-                        sendToDlq(event, ex.getMessage());
+                        Throwable cause = (ex instanceof CompletionException) ? ex.getCause() : ex;
+
+                        String errorMsg;
+                        if (cause instanceof TimeoutException) {
+                            errorMsg = String.format("PG 결제 응답 %d초 타임아웃 (SLA 초과)", asyncTimeoutSec);
+                        } else {
+                            errorMsg = (cause.getMessage() != null) ? cause.getMessage() : cause.getClass().getSimpleName();
+                        }
+
+                        log.error("💥 [{}] [결제 실패] OrderID: {}, UserId: {}, Cause: {}",
+                                batchId, event.getOrderId(), event.getUserId(), errorMsg);
+
+                        // DLQ 이관 및 보상 트랜잭션 (명시적 에러 메시지 전달)
+                        sendToDlq(event, errorMsg);
                         return null;
                     });
 
             futures.add(future);
         }
 
-        // 🚀 4. 배치 내의 모든 비동기 작업(성공 or DLQ 이관)이 수습되면 수동 Ack!
+        // 🚀 4.  수동 커밋
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
                 .thenRun(() -> {
-                    ack.acknowledge(); // 비동기 작업 완료 후 안전하게 커밋!
-                    log.info("✅ 배치 {}건 비동기 처리 & DLQ 이관 수습 후 오프셋 커밋 완료", records.size());
+                    // 🧪 [멱등성 테스트용 가상 에러 삽입]
+                    // Redis 상태 변경 및 ticket-payments 이벤트 발행은 완료되었으나 커밋 직전 강제 예외 발생!
+//                    boolean testIdempotency = true;
+//                    if (testIdempotency) {
+//                        log.warn("🔥 [멱등성 테스트] Redis 상태 변경 완료 후, Kafka Ack 커밋 직전 강제 RuntimeException 발생!");
+//                        throw new RuntimeException("💥 [의도된 에러] 오프셋 커밋 실패 유도 - 컨슈머 재시도 테스트");
+//                    }
+
+                    ack.acknowledge();
+                    log.info("✅ [{}] [Batch Finished] 배치 {}건 비동기 처리 -> 오프셋 커밋 완료", batchId, records.size());
                 });
     }
 
-    private void processPaymentWithTimeout(TicketReservationDto event) {
-        log.info("💳 [결제 시작] 유저: {}, OrderID: {}", event.getUserId(), event.getOrderId());
+    private void processPaymentWithTimeout(TicketReservationDto event, String batchId) {
         String statusKey = String.format("order:status:%s", event.getOrderId());
 
         try {
-            // 🧪 테스트용: 특정 유저 지연 재현 (3초 + 5초 = 총 8초 대기 -> 5초 타임아웃 걸림)
-            Thread.sleep(5000);
-            if (Objects.equals(event.getUserId(), "5000") || Objects.equals(event.getUserId(), "4000")) {
-                Thread.sleep(5000);
+            // 🛡️ 멱등성 검증: 이미 결제 성공(SUCCESS) 또는 실패(FAILURE) 처리된 주문인지 Redis에서 확인
+//            String existingStatus = redisTemplate.opsForValue().get(statusKey);
+//            if (PaymentStatus.SUCCESS.name().equals(existingStatus) || PaymentStatus.FAILURE.name().equals(existingStatus)) {
+//                log.warn("🛡️ [멱등성 방어 성공] 이미 처리된 OrderID입니다. (현재 상태: {}) - 결제 로직을 중복 수행하지 않고 스킵합니다. | UserId: {}",
+//                        existingStatus, event.getUserId());
+//                return; // 중복 처리 방지!
+//            }
+
+            // 🧪 테스트용: 기본 3초 지연
+//            Thread.sleep(3000);
+
+            // 🧪 테스트용: userId "100", "200"은 추가 7초 대기 (총 8초 -> 5초 타임아웃 걸림)
+            if (Objects.equals(event.getUserId(), "user100") || Objects.equals(event.getUserId(), "user200")) {
+                log.info("💳 [{}] [Timeout user 결제 시작 - 6초 대기] 유저: {}, OrderID: {}", batchId, event.getUserId(), event.getOrderId());
+                Thread.sleep(7000);
             }
 
-            // 🧪 테스트용: 특정 조건일 때 일반 비즈니스/시스템 예외 발생 가상 재현
-            if (Objects.equals(event.getUserId(), "9999")) {
+            // 🧪 테스트용: userId "300"은 비즈니스 에러 발생
+            if (Objects.equals(event.getUserId(), "user300")) {
+                log.info("💳 [{}] [잔액 부족 user 결제 시작] 유저: {}, OrderID: {}", batchId, event.getUserId(), event.getOrderId());
                 throw new IllegalStateException("PG사 잔액 부족 또는 카드 정보 오류");
             }
 
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("결제 처리 스레드 인터럽트 발생", e);
         } catch (Exception e) {
-            log.error("💥 [결제 로직 내부 에러 발생] OrderID: {}, 원인: {}", event.getOrderId(), e.getMessage());
             throw new RuntimeException(e.getMessage(), e);
         }
 
-        // ✅ 예외 없이 완벽하게 성공했을 때만 아래 성공 로직 실행
         event.setStatus(PaymentStatus.SUCCESS.name());
         redisTemplate.opsForValue().set(statusKey, PaymentStatus.SUCCESS.name());
 
         kafkaTemplate.send("ticket-payments", event.getUserId(), event);
-        log.info("🎉 [결제 완료] 유저: {}", event.getUserId());
     }
 
-    @KafkaListener(topics = "ticket-payments", groupId = "ticket-group-es-indexer")
-    public void consumeBatch(List<TicketReservationDto> records) {
+    @KafkaListener(topics = "ticket-payments", groupId = "${custom.kafka.groups.indexer}")
+    public void consumePayment(List<TicketReservationDto> records) {
+//        log.info("📦 [consumePayment] 비동기 수신 메시지 수: {}건", records.size());
         List<TicketReservationDocument> documents = records.stream()
                 .filter(Objects::nonNull)
                 .map(event -> TicketReservationDocument.builder()
@@ -112,28 +136,17 @@ public class TicketConsumerListener {
         }
     }
 
-    // 🚨 지연/실패 건을 DLQ 토픽으로 이관하고 보상 트랜잭션 및 실패 이벤트를 처리하는 메서드
     private void sendToDlq(TicketReservationDto event, String reason) {
-        String stockKey = String.format("ticket:stock:%s", event.getTicketId());
-        String statusKey = String.format("order:status:%s", event.getOrderId());
-
-        log.warn("🚨 [DLQ 이관 및 보상 트랜잭션 시작] userId: {}, OrderID: {} (사유: {})",
-                event.getUserId(), event.getOrderId(), reason);
-
         // 1. DTO 상태 변경 (FAILURE)
         event.setStatus(PaymentStatus.FAILURE.name());
+        event.setErrorMessage(reason);
 
-        // 2. Redis 상태 변경 & 보상 트랜잭션 (선점했던 좌석/재고 원복)
-        redisTemplate.opsForValue().set(statusKey, PaymentStatus.FAILURE.name());
-        Long restoredStock = redisTemplate.opsForValue().increment(stockKey);
-        log.info("🔄 [보상 완료] Redis 재고 원복 완료 (ticketId: {}, 현재재고: {})", event.getTicketId(), restoredStock);
-
-        // 3. DLQ 전용 토픽으로 발송 (사후 모니터링/분석/Dead Letter 보관용)
-        kafkaTemplate.send("ticket-reservations.DLQ", event.getUserId(), event);
-
-        // 4. Elasticsearch 인덱싱 컨슈머 등을 위한 최종 결과 토픽 발행 (실패 이벤트)
+        // 2. DLQ 토픽 및 실패 이벤트 발행
+        kafkaTemplate.send("ticket-reservations.DLQ"
+                , String.format("userId:%s:orderId:%s", event.getUserId(), event.getOrderId()), event);
         kafkaTemplate.send("ticket-payments", event.getUserId(), event);
 
-        log.info("✅ [DLQ 이관 완료] OrderID: {} 실패 처리 및 이벤트 발행 완료", event.getOrderId());
+        log.info("🚨 [DLQ 이관 & 보상완료] OrderID: {}, UserId: {}",
+                event.getOrderId(), event.getUserId());
     }
 }
