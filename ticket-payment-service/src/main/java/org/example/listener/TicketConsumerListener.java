@@ -29,6 +29,7 @@ public class TicketConsumerListener {
     private final KafkaTemplate<String, TicketReservationDto> kafkaTemplate;
     private final TicketReservationElasticRepository repository;
     private final ExecutorService paymentExecutor = Executors.newFixedThreadPool(50);
+    private final int asyncTimeoutSec = 3;
 
     @KafkaListener(topics = "ticket-reservations", groupId = "${custom.kafka.groups.payment}",
             containerFactory = "manualAckKafkaListenerContainerFactory")
@@ -43,15 +44,22 @@ public class TicketConsumerListener {
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                         processPaymentWithTimeout(event, batchId);
                     }, paymentExecutor)
-                    .orTimeout(3, TimeUnit.SECONDS)
+                    .orTimeout(asyncTimeoutSec, TimeUnit.SECONDS)
                     .exceptionally(ex -> {
                         Throwable cause = (ex instanceof CompletionException) ? ex.getCause() : ex;
 
-                        log.error("💥 [{}] [결제 실패] OrderID: {}, UserId: {}, Cause: {}",
-                                batchId, event.getOrderId(), event.getUserId(), cause.getMessage());
+                        String errorMsg;
+                        if (cause instanceof TimeoutException) {
+                            errorMsg = String.format("PG 결제 응답 %d초 타임아웃 (SLA 초과)", asyncTimeoutSec);
+                        } else {
+                            errorMsg = (cause.getMessage() != null) ? cause.getMessage() : cause.getClass().getSimpleName();
+                        }
 
-                        // DLQ 이관 및 보상 트랜잭션
-                        sendToDlq(event, cause.getMessage());
+                        log.error("💥 [{}] [결제 실패] OrderID: {}, UserId: {}, Cause: {}",
+                                batchId, event.getOrderId(), event.getUserId(), errorMsg);
+
+                        // DLQ 이관 및 보상 트랜잭션 (명시적 에러 메시지 전달)
+                        sendToDlq(event, errorMsg);
                         return null;
                     });
 
@@ -129,23 +137,16 @@ public class TicketConsumerListener {
     }
 
     private void sendToDlq(TicketReservationDto event, String reason) {
-        String stockKey = "ticket:stock:god";
-        String statusKey = String.format("order:status:%s", event.getOrderId());
-
         // 1. DTO 상태 변경 (FAILURE)
         event.setStatus(PaymentStatus.FAILURE.name());
         event.setErrorMessage(reason);
 
-        // 2. Redis 상태 변경 & 보상 트랜잭션 (선점했던 재고 원복)
-        redisTemplate.opsForValue().set(statusKey, PaymentStatus.FAILURE.name());
-        Long restoredStock = redisTemplate.opsForValue().increment(stockKey);
-
-        // 3. DLQ 토픽 및 실패 이벤트 발행
+        // 2. DLQ 토픽 및 실패 이벤트 발행
         kafkaTemplate.send("ticket-reservations.DLQ"
                 , String.format("userId:%s:orderId:%s", event.getUserId(), event.getOrderId()), event);
         kafkaTemplate.send("ticket-payments", event.getUserId(), event);
 
-        log.info("🚨 [DLQ 이관 & 보상완료] OrderID: {}, UserId: {}, 원복된 재고: {}",
-                event.getOrderId(), event.getUserId(), restoredStock);
+        log.info("🚨 [DLQ 이관 & 보상완료] OrderID: {}, UserId: {}",
+                event.getOrderId(), event.getUserId());
     }
 }

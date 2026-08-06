@@ -6,6 +6,8 @@ import org.example.dto.TicketReservationDto;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
 
@@ -19,26 +21,22 @@ public class TicketDlqListner {
     @KafkaListener(
             topics = "ticket-reservations.DLQ",
             groupId = "${custom.kafka.groups.dlq}",
-            containerFactory = "manualAckKafkaListenerContainerFactory" // 👈 속성 추가!
+            containerFactory = "manualAckKafkaListenerContainerFactory"
     )
-    public void consumeDlq(TicketReservationDto event, Acknowledgment ack) {
-        log.error("🚨 [DLQ 포착] 메시지 격리 - OrderID: {}", event.getOrderId());
+    public void consumeDlq(TicketReservationDto event, Acknowledgment ack, @Header(value = KafkaHeaders.RECEIVED_KEY, required = false) String key) {
+        log.error("🚨 [DLQ 포착] 메시지 격리 - key: {}, errorMsg:{}", key, event.getErrorMessage());
 
-        String stockKey = "ticket:stock:" + event.getTicketId();
         String orderStatusKey = "order:status:" + event.getOrderId();
-
         try {
             // 🔄 보상 트랜잭션 1: Redis 선점 재고 +1 원복 (재고 누수 방지)
-            Long restoredStock = redisTemplate.opsForValue().increment(stockKey);
+            Long restoredStock = redisTemplate.opsForValue().increment(event.getTicketId());
 
             // 🔄 보상 트랜잭션 2: 주문 상태 FAILED 변경
             redisTemplate.opsForValue().set(orderStatusKey, "FAILED");
 
             log.info("🔄 [보상 트랜잭션 완수] Redis 재고 원복 완료 (현재재고: {}) | 주문상태: FAILED", restoredStock);
 
-            // DLQ 메시지 처리 완료 후 커밋
             ack.acknowledge();
-
         } catch (Exception e) {
             log.error("💥 [CRITICAL] DLQ 보상 트랜잭션 처리 중 에러 발생!", e);
         }
