@@ -22,12 +22,14 @@ docker exec -it kafka-1 kafka-topics --bootstrap-server localhost:9092 --topic t
 
 ## 대용량 테스트
 
-# user1부터 user1000까지 10000건의 요청을 백그라운드(&)로 동시에 발사
+# user1부터 user100까지 100건의 요청을 백그라운드(&)로 동시에 발사
 
-for i in {1..1000}; do
+for i in {1..100}; do
 curl -X POST "http://localhost:8080/reserve" \
 -H "Content-Type: application/json" \
--d "{\"userId\":\"user$i\", \"ticketId\":\"ticket:stock:god\"}" &
+-d "{\"userId\":\"user$i\", \"ticketId\":\"ticket01\"}" &
 done
 wait
 
+
+## 적재 테스트
