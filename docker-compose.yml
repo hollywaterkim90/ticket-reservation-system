@@ -1,7 +1,7 @@
 version: '3.8'
 
 # docker compose up -d kafka-1 kafka-2 kafka-3
-# docker compose up -d local-elasticsearch local-kibana local-redis kafka-ui
+# docker compose up -d local-elasticsearch local-kibana local-redis redis-insight kafka-ui
 
 services:
   # --- Kafka Broker 1 ---
@@ -13,16 +13,12 @@ services:
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: 'broker,controller'
-      # 💡 CONTROLLER(29093), INTERNAL(9092), EXTERNAL(19092) 3개 리스너를 모두 선언
       KAFKA_LISTENERS: 'INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:19092,CONTROLLER://0.0.0.0:29093'
       KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka-1:9092,EXTERNAL://localhost:9092'
       KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka-1:29093,2@kafka-2:29093,3@kafka-3:29093'
-
-      # 🔑 [핵심 수정] KAFKA_LISTENERS에 사용한 이름들을 그대로 매핑해 줍니다.
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
@@ -41,11 +37,9 @@ services:
       KAFKA_LISTENERS: 'INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:19093,CONTROLLER://0.0.0.0:29093'
       KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka-2:9092,EXTERNAL://localhost:9093'
       KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka-1:29093,2@kafka-2:29093,3@kafka-3:29093'
-
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
@@ -64,17 +58,14 @@ services:
       KAFKA_LISTENERS: 'INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:19094,CONTROLLER://0.0.0.0:29093'
       KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka-3:9092,EXTERNAL://localhost:9094'
       KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka-1:29093,2@kafka-2:29093,3@kafka-3:29093'
-
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_MIN_INSYNC_REPLICAS: 2
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
-
 
   # 🚀 토픽 자동 생성을 위한 Init 컨테이너
   init-kafka:
@@ -88,17 +79,14 @@ services:
       - -c
       - |
         echo "⏳ Waiting for Kafka brokers to be ready..."
-
         until kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --list > /dev/null 2>&1; do
           echo "Kafka is not ready yet... sleeping 2s"
           sleep 2
         done
-
         echo "🚀 Creating kafka topics..."
         kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --create --if-not-exists --topic ticket-reservations --partitions 3 --replication-factor 3
         kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --create --if-not-exists --topic ticket-payments --partitions 3 --replication-factor 3
         kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --create --if-not-exists --topic ticket-reservations.DLQ --partitions 3 --replication-factor 3
-
         echo "✅ Successfully created topics:"
         kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --list
 
@@ -110,7 +98,6 @@ services:
       - "8090:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: local-kafka-cluster
-      # 💡 도커 내부 통신 포트인 9092로 수정했습니다.
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
     depends_on:
       - kafka-1
@@ -146,3 +133,16 @@ services:
     container_name: local-redis
     ports:
       - "6379:6379"
+
+  # 5. 레디스 인사이트 (Redis 공식 웹 GUI 관리 툴 - v2 최신 규격 반영)
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: redis-insight
+    ports:
+      - "8001:5540" # 💡 최신 이미지의 내부 기본 포트는 5540입니다.
+    environment:
+      - RI_APP_PORT=5540
+      # 자동 연결을 지원하는 최신 환경 변수 포맷입니다.
+      - REDIS_CONNECTIONS=local-redis:local-redis:6379
+    depends_on:
+      - local-redis
