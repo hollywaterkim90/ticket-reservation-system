@@ -1,5 +1,5 @@
 server:
-  port: 8082 # 포트 중복 충돌 방지
+  port: 8086
 
 # 💡 컨슈머 그룹 ID 중앙 관리
 custom:

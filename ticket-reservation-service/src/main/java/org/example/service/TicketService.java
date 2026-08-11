@@ -34,7 +34,7 @@ public class TicketService {
 
         // 3. Kafka 메시지 생성 (status: PENDING)
         requestDto.setOrderId(TSID.Factory.getTsid().toString());
-        requestDto.setStatus(PaymentStatus.PENDING.name());
+        requestDto.setStatus(PaymentStatus.RESERVED.name());
 
         try {
             log.info("send message: user: {}, remainStock: {}, orderId: {}",
@@ -43,7 +43,7 @@ public class TicketService {
                     requestDto.getOrderId());
 
             // 통과 시 1차 토픽으로 고속 발행
-            kafkaTemplate.send("ticket-reservations", requestDto);
+            kafkaTemplate.send("ticket-reservations", requestDto.getTicketId(), requestDto);
 
             return ResponseEntity.ok("선착순 통과! 결제 대기열에 진입했습니다.");
         } catch (Exception e) {
@@ -72,9 +72,6 @@ public class TicketService {
         Long remainStock = redisTemplate.opsForValue().decrement(stockKey);
 
         if (remainStock == null || remainStock < 0) {
-            // 🔄 마이너스로 떨어진 재고를 다시 +1 원복
-            redisTemplate.opsForValue().increment(stockKey);
-
             log.warn("[선착순 마감] 재고가 모두 소진되었습니다. {}", stockKey);
             // ❌ return 대신 예외를 던져서 카프카 전송을 막습니다.
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "티켓 재고가 모두 소진되어 예약이 마감되었습니다.");

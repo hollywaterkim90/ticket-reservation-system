@@ -23,7 +23,7 @@ public class RedisDataInitializer {
             return null;
         });
 
-        redisTemplate.opsForValue().set("ticket:stock:god", "495");
+        redisTemplate.opsForValue().set("ticket:stock:god", "5000");
         log.info("🚀 [ApplicationReadyEvent] 모든 준비 완료 후 Redis 초기 재고 세팅!");
     }
 }

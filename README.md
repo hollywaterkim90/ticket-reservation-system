@@ -21,14 +21,12 @@
 #!/bin/bash
 echo "🔥 대용량 예매 부하 테스트 시작 (10000건 동시 요청 비동기 쉘 발사)..."
 
-for i in {1..10000}; do
-  curl -X POST "http://localhost:8080/reserve" \
-  -H "Content-Type: application/json" \
-  -d "{\"userId\":\"user$i\", \"ticketId\":\"ticket:stock:god\"}" &
-done
-
-wait
+// Mac or linux
+for i in {1..5000}; do curl -X POST "http://localhost:8085/reserve" -H "Content-Type: application/json" -d "{\"userId\":\"user$i\", \"ticketId\":\"ticket:stock:god\"}" & done wait
 echo "✅ 10000건의 분산 요청 발사 완료. 컨슈머 리스너 메트릭 확인 필요."
+
+//  Windows
+for /L %i in (1,1,5000) do curl -X POST "http://localhost:8085/reserve" -H "Content-Type: application/json" -d "{\"userId\":\"user%i\", \"ticketId\":\"ticket:stock:god\"}"
 ```
 
 
