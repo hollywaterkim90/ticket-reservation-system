@@ -1,5 +1,6 @@
 package org.example.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,7 +14,6 @@ import org.springframework.kafka.listener.ContainerProperties;
 @EnableKafka
 public class KafkaConfig {
 
-    // 💡 Spring Boot가 YML을 읽어서 만들어주는 KafkaProperties를 주입받습니다.
     private final KafkaProperties kafkaProperties;
 
     public KafkaConfig(KafkaProperties kafkaProperties) {
@@ -22,7 +22,6 @@ public class KafkaConfig {
 
     @Bean
     public ConsumerFactory<Object, Object> consumerFactory() {
-        // 💡 YML 설정값(auto-offset-reset: earliest 포함)을 통째로 맵으로 가져옵니다.
         return new DefaultKafkaConsumerFactory<>(kafkaProperties.buildConsumerProperties(null));
     }
 
@@ -34,6 +33,10 @@ public class KafkaConfig {
         factory.setConsumerFactory(consumerFactory());
         factory.setBatchListener(true); // 배치 리스너
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL); // 수동 Ack
+
+        String concurrencyStr = kafkaProperties.getConsumer().getProperties().get("custom.concurrency");
+        int concurrencyCount = (concurrencyStr != null) ? Integer.parseInt(concurrencyStr) : 3;
+        factory.setConcurrency(concurrencyCount);
 
         return factory;
     }

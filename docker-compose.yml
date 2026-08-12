@@ -84,9 +84,9 @@ services:
           sleep 2
         done
         echo "🚀 Creating kafka topics..."
-        kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --create --if-not-exists --topic ticket-reservations --partitions 3 --replication-factor 3
-        kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --create --if-not-exists --topic ticket-payments --partitions 3 --replication-factor 3
-        kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --create --if-not-exists --topic ticket-reservations.DLQ --partitions 3 --replication-factor 3
+        kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --create --if-not-exists --topic ticket-reservations --partitions ${KAFKA_TOPIC_PARTITIONS} --replication-factor 3
+        kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --create --if-not-exists --topic ticket-payments --partitions ${KAFKA_TOPIC_PARTITIONS} --replication-factor 3
+        kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --create --if-not-exists --topic ticket-reservations.DLQ --partitions ${KAFKA_TOPIC_PARTITIONS} --replication-factor 3
         echo "✅ Successfully created topics:"
         kafka-topics --bootstrap-server kafka-1:9092,kafka-2:9092,kafka-3:9092 --list
 

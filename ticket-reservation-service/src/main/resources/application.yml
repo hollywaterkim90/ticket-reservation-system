@@ -12,7 +12,8 @@ spring:
       properties:
         # 헤더에 DTO 패키지/클래스 정보 포함 (Consumer가 참고하여 변환 가능)
         spring.json.add.type.headers: true
-
+        partitioner:
+          class: org.example.config.TicketRoundRobinPartitioner
 
   data:
     redis:
