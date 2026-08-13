@@ -392,7 +392,6 @@ spec:
     nodePort: 30003
   selector:
     app: kafka-ui
-
 ---
 # --- 9. 자동 토픽 생성기 (init-kafka) ---
 apiVersion: batch/v1
