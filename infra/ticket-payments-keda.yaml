@@ -1,0 +1,24 @@
+# ticket-payments-keda.yaml
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ticket-payments-keda-autoscaler
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ticket-payments-service # 🎯 결제 서비스 Deployment 이름
+  minReplicaCount: 1
+  maxReplicaCount: 3              # 🎯 파티션 3개에 정확히 매칭
+  cooldownPeriod: 30
+  triggers:
+  - type: kafka
+    metadata:
+      # KEDA operator 는 keda 네임스페이스에서 돌기 때문에 cross-namespace FQDN 필요
+      bootstrapServers: kafka-1-service.default.svc.cluster.local:9092,kafka-2-service.default.svc.cluster.local:9092,kafka-3-service.default.svc.cluster.local:9092
+      # 🎯 결제 워커가 실제로 소비하는 그룹/토픽 (TicketConsumerListener.consumeReservation)
+      consumerGroup: ticket-group-payment-worker
+      topic: ticket-reservations
+      # 파티션 전체 lag 이 이 값을 넘으면 팟(=active consumer) 스케일아웃
+      lagThreshold: "30"

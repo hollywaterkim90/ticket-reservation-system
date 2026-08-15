@@ -30,7 +30,6 @@ public class TicketConsumerListener {
     private final KafkaTemplate<String, TicketReservationDto> kafkaTemplate;
     private final TicketReservationElasticRepository repository;
     private final ExecutorService paymentExecutor = Executors.newFixedThreadPool(50);
-    private final int asyncTimeoutSec = 5;
 
     @KafkaListener(topics = "ticket-reservations", groupId = "${custom.kafka.groups.payment}",
             containerFactory = "manualAckKafkaListenerContainerFactory")
@@ -41,6 +40,7 @@ public class TicketConsumerListener {
         List<CompletableFuture<ProcessResult>> futures = new ArrayList<>();
 
         for (TicketReservationDto event : records) {
+            int asyncTimeoutSec = 5;
             CompletableFuture<ProcessResult> future = CompletableFuture.supplyAsync(() -> processPayment(event, batchId), paymentExecutor)
                     .orTimeout(asyncTimeoutSec, TimeUnit.SECONDS)
                     .handle((result, ex) -> {
@@ -67,7 +67,7 @@ public class TicketConsumerListener {
 
         // 🧪 [멱등성 테스트 전용 가상 에러 강제 발생]
         // 최초 실행 시 예외가 터져 Kafka 커밋이 씹히고, Kafka가 이 배치를 통째로 다시 읽어오게 만듭니다.
-        boolean testIdempotency = true;
+        boolean testIdempotency = false;
         if (testIdempotency) {
             log.warn("🔥 [멱등성 테스트] Kafka Ack 커밋 직전 강제 RuntimeException 발생! (오프셋 커밋 실패 유도)");
             throw new RuntimeException("💥 [의도된 에러] 오프셋 커밋 실패로 재처리 루프 진입");
@@ -108,7 +108,8 @@ public class TicketConsumerListener {
                 throw new IllegalStateException("PG사 잔액 부족 또는 카드 정보 오류");
             }
 
-            // 💸 [실제 결제 영역] 정상 유저 처리
+            // 💸 [실제 결제 영역] PG사 연동 sleep 정상 유저 처리
+            Thread.sleep(500);
             log.info("💳 [{}] [정상 결제 승인 중] 유저: {}, OrderID: {}", batchId, event.getUserId(), event.getOrderId());
 
             // 성공 상태 기록

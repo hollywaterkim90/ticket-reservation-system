@@ -24,17 +24,17 @@ public class TicketService {
     final String stockKey = "ticket:stock:god";
 
     public ResponseEntity<String> sendToReservationTopic(TicketReservationDto requestDto) {
-        String userKey = String.format("user:%s", requestDto.getUserId());
+        String userId = String.format("user:%s", requestDto.getUserId());
 
         // 1. 중복 예약 체크
-        checkDuplicate(userKey);
+        checkDuplicate(userId);
 
         // 2. 선착순 재고 차감
         checkFirstComeFirstServed();
 
         // 3. Kafka 메시지 생성 (status: PENDING)
         requestDto.setOrderId(TSID.Factory.getTsid().toString());
-        requestDto.setStatus(PaymentStatus.PENDING.name());
+        requestDto.setStatus(PaymentStatus.RESERVED.name());
 
         try {
             log.info("send message: user: {}, remainStock: {}, orderId: {}",
@@ -51,18 +51,18 @@ public class TicketService {
 
             // 🔄 보상 트랜잭션: 카프카 전송 실패 시 Redis 재고 및 유저 상태 원복
             redisTemplate.opsForValue().increment(stockKey);
-            redisTemplate.delete(userKey);
+            redisTemplate.delete(userId);
 
             return ResponseEntity.internalServerError().body("시스템 오류로 예약 요청에 실패했습니다.");
         }
     }
 
-    private void checkDuplicate(String userKey) {
-        // 1인 1매 중복 예약 방지 (Redis SetIfAbsent)
-        Boolean isFirstRequest = redisTemplate.opsForValue().setIfAbsent(userKey, PaymentStatus.PENDING.name(), Duration.ofMinutes(10));
+    private void checkDuplicate(String userId) {
+        // 1인 1매 중복 예약 방지, userId를 redis key로 사용
+        Boolean isFirstRequest = redisTemplate.opsForValue().setIfAbsent(userId, PaymentStatus.PENDING.name(), Duration.ofMinutes(10));
 
         if (Boolean.FALSE.equals(isFirstRequest)) {
-            log.warn("[중복 예약 거부] 이미 신청한 유저입니다. 유저: {}", userKey);
+            log.warn("[중복 예약 거부] 이미 신청한 유저입니다. 유저: {}", userId);
             // ❌ return 대신 예외를 던져서 실행 흐름을 즉시 중단시킵니다.
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 예약을 신청하셨습니다. (1인 1매만 가능)");
         }
@@ -72,9 +72,6 @@ public class TicketService {
         Long remainStock = redisTemplate.opsForValue().decrement(stockKey);
 
         if (remainStock == null || remainStock < 0) {
-            // 🔄 마이너스로 떨어진 재고를 다시 +1 원복
-            redisTemplate.opsForValue().increment(stockKey);
-
             log.warn("[선착순 마감] 재고가 모두 소진되었습니다. {}", stockKey);
             // ❌ return 대신 예외를 던져서 카프카 전송을 막습니다.
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "티켓 재고가 모두 소진되어 예약이 마감되었습니다.");

@@ -1,5 +1,5 @@
 package org.example.dto;
 
 public enum PaymentStatus {
-    SUCCESS, PENDING, FAILURE, CANCELLED
+    SUCCESS, PENDING, FAILURE, CANCELLED, RESERVED;
 }
