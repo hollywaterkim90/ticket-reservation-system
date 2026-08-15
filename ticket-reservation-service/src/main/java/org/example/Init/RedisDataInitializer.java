@@ -8,6 +8,8 @@ import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -23,7 +25,16 @@ public class RedisDataInitializer {
             return null;
         });
 
-        redisTemplate.opsForValue().set("ticket:stock:god", "5000");
-        log.info("🚀 [ApplicationReadyEvent] 모든 준비 완료 후 Redis 초기 재고 세팅!");
+        // 티켓 종류별 초기 재고. 키는 요청의 ticketId 와 동일하다.
+        // 여기에 등록되지 않은 ticketId 로 요청이 들어오면 404(존재하지 않는 티켓)로 거절된다.
+        Map<String, String> initialStock = Map.of(
+                "ticket:stock:god", "5000",
+                "ticket:stock:iu", "1000",
+                "ticket:stock:bts", "3000"
+        );
+
+        initialStock.forEach((key, stock) -> redisTemplate.opsForValue().set(key, stock));
+
+        log.info("🚀 [ApplicationReadyEvent] Redis 초기 재고 세팅 완료: {}", initialStock);
     }
 }

@@ -21,24 +21,26 @@ public class TicketService {
 
     private final KafkaTemplate<String, TicketReservationDto> kafkaTemplate;
     private final StringRedisTemplate redisTemplate;
-    final String stockKey = "ticket:stock:god";
 
     public ResponseEntity<String> sendToReservationTopic(TicketReservationDto requestDto) {
         String userId = String.format("user:%s", requestDto.getUserId());
+        // 재고 카운터의 Redis 키 = 요청의 ticketId. 티켓 종류별로 독립적인 재고를 갖는다.
+        String stockKey = requestDto.getTicketId();
 
         // 1. 중복 예약 체크
         checkDuplicate(userId);
 
         // 2. 선착순 재고 차감
-        checkFirstComeFirstServed();
+        checkFirstComeFirstServed(stockKey);
 
         // 3. Kafka 메시지 생성 (status: PENDING)
         requestDto.setOrderId(TSID.Factory.getTsid().toString());
         requestDto.setStatus(PaymentStatus.RESERVED.name());
 
         try {
-            log.info("send message: user: {}, remainStock: {}, orderId: {}",
+            log.info("send message: user: {}, ticket: {}, remainStock: {}, orderId: {}",
                     requestDto.getUserId(),
+                    stockKey,
                     redisTemplate.opsForValue().get(stockKey),
                     requestDto.getOrderId());
 
@@ -68,11 +70,23 @@ public class TicketService {
         }
     }
 
-    private void checkFirstComeFirstServed() {
+    private void checkFirstComeFirstServed(String stockKey) {
+        // 1) 등록된 티켓인지 먼저 확인
+        if (Boolean.FALSE.equals(redisTemplate.hasKey(stockKey))) {
+            log.warn("[미등록 티켓] 등록되지 않은 티켓입니다. ticket: {}", stockKey);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "존재하지 않는 티켓입니다.");
+        }
+
+        // 2) 선착순 재고 차감
         Long remainStock = redisTemplate.opsForValue().decrement(stockKey);
 
         if (remainStock == null || remainStock < 0) {
-            log.warn("[선착순 마감] 재고가 모두 소진되었습니다. {}", stockKey);
+            // 차감했다가 거절하는 경우 반드시 되돌린다.
+            // 되돌리지 않으면 마감 이후 요청마다 카운터가 계속 내려가고,
+            // 이후 DLQ 보상 원복(+1)이 실제 재고와 어긋나게 된다.
+            redisTemplate.opsForValue().increment(stockKey);
+
+            log.warn("[선착순 마감] 재고가 모두 소진되었습니다. ticket: {}", stockKey);
             // ❌ return 대신 예외를 던져서 카프카 전송을 막습니다.
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "티켓 재고가 모두 소진되어 예약이 마감되었습니다.");
         }
