@@ -22,7 +22,8 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
 
       properties:
-        custom.concurrency: ${KAFKA_TOPIC_PARTITIONS:1}
+        # 팟(인스턴스)당 컨슈머 스레드 수. 스케일아웃은 KEDA가 팟 수로 담당하므로 1이 기본값.
+        custom.concurrency: ${KAFKA_CONSUMER_CONCURRENCY:1}
         # Kafka Client Native 옵션
         max.poll.interval.ms: 15000
         max.poll.records: 50
