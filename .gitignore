@@ -23,3 +23,6 @@ bin/
 
 # Environment
 .env
+
+# 로컬 실행 시 생성되는 port-forward PID 기록
+scripts/.local-pf-pids
