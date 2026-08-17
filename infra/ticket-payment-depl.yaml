@@ -38,7 +38,8 @@ spec:
           value: "http://local-elasticsearch:9200"
         # KafkaConfig 의 custom.concurrency = 팟당 컨슈머 스레드 수.
         # 1로 두어야 팟 1개 = active consumer 1개. 스케일아웃은 KEDA 가 팟 수(1→3)로 담당한다.
-        - name: KAFKA_TOPIC_PARTITIONS
+        # 토픽의 파티션 수(3)와는 다른 값이므로 혼동 주의.
+        - name: KAFKA_CONSUMER_CONCURRENCY
           value: "1"
 
         # 앱이 뜰 때까지 여유있게 대기 (actuator 미포함 → TCP 소켓으로 체크)

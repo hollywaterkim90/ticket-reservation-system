@@ -12,6 +12,13 @@ spec:
   minReplicaCount: 1
   maxReplicaCount: 3              # 🎯 파티션 3개에 정확히 매칭
   cooldownPeriod: 30
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          # 기본값은 300초. 부하가 잦아든 뒤 축소까지 대기하는 시간.
+          # 짧게 두면 반응이 빠르지만 트래픽이 출렁일 때 팟이 요동칠 수 있다.
+          stabilizationWindowSeconds: 60
   triggers:
   - type: kafka
     metadata:

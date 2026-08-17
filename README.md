@@ -210,7 +210,9 @@ kubectl exec <kafka-1 팟 이름> -- kafka-consumer-groups `
   --bootstrap-server localhost:9092 --describe --group ticket-group-payment-worker --members
 ```
 
-> **설계 노트 ①** 팟당 컨슈머 스레드는 `KAFKA_TOPIC_PARTITIONS=1`(deployment env)로 **1개**입니다. 스케일아웃은 앱 스레드가 아니라 **KEDA가 팟 수를 늘려서** 담당합니다. 그래야 "평소 active consumer 1 → lag 발생 시 증가"가 성립합니다.
+> **설계 노트 ①** 팟당 컨슈머 스레드는 `KAFKA_CONSUMER_CONCURRENCY=1`(deployment env)로 **1개**입니다. 스케일아웃은 앱 스레드가 아니라 **KEDA가 팟 수를 늘려서** 담당합니다. 그래야 "평소 active consumer 1 → lag 발생 시 증가"가 성립합니다.
+>
+> 토픽의 **파티션 수(3)** 와는 다른 값입니다. 파티션 수는 컨슈머 병렬도의 *상한*(파티션 N개 → 컨슈머 최대 N개)이고, `KAFKA_CONSUMER_CONCURRENCY`는 팟 하나가 띄우는 스레드 수입니다.
 >
 > **설계 노트 ②** KEDA operator는 `keda` 네임스페이스에서 도는데, Kafka 브로커가 advertised.listener로 짧은 이름(`kafka-1-service`)을 반환합니다. 이 이름은 `keda` 네임스페이스에서 해석되지 않으므로, `infra/ticket-payments-keda-broker-alias.yaml`이 동일 이름의 `ExternalName` 서비스를 만들어 `default`의 실제 브로커로 별칭 연결합니다. (Kafka 재시작 없이 해결)
 

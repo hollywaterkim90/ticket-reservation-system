@@ -20,7 +20,7 @@ fi
 
 # 2) 혹시 남아있는 포트 기준 백업 정리
 for p in 8090 8085; do
-  holder="$(lsof -ti "tcp:$p" 2>/dev/null || true)"
+  holder="$(lsof -ti "tcp:$p" 2>/dev/null | tr '\n' ' ' | sed 's/ $//')"
   if [ -n "$holder" ]; then
     echo "포트 $p 잔여 프로세스 종료 (PID $holder)"
     kill -9 $holder 2>/dev/null || true
