@@ -1,10 +1,27 @@
-# 🚀 Kafka 대용량 예매 트래픽 처리 프로젝트
+# Kafka 기반 티켓 예매 시스템
 
-본 프로젝트는 대규모 동시성 예매 요청 환경을 가정하고, **Kafka 배치 컨슈머의 비동기 스레드 풀 격리 구조**와 **Redis 분산 캐시 기반의 멱등성 방어벽**을 구축하여 극한의 장애 상황 속에서도 시스템 정합성을 어떻게 유지하는지 증명하기 위한 아키텍처 검증 가이드입니다.
+동시 예매 요청 환경에서 Kafka 를 다루며 마주친 문제를 **재현하고 해결하는 방식**으로 학습한 프로젝트입니다.
+각 문제는 재현 → 원인 → 해결 순으로 Issue 에 기록했으며, 채택하지 않은 대안과 그 이유도 함께 남겼습니다.
+
+**구성:** Spring Boot 2개 서비스(예매/결제) · Kafka 3 브로커 · Redis · Elasticsearch · Kubernetes + KEDA
+
+## 다룬 문제
+
+| | 내용 |
+|---|---|
+| [#1](../../issues/1) | 자동 생성된 토픽이 RF=1 로 고정되어, 브로커를 복구해도 ISR 에 합류하지 못하는 교착 |
+| [#3](../../issues/3) | PG 연동 지연으로 발생한 컨슈머 리밸런싱과 중복 소비 |
+| [#7](../../issues/7) | 결제 파이프라인의 Head-of-Line Blocking 해소와 DLQ 기반 에러 격리 |
+| [#10](../../issues/10) | 오프셋 커밋 실패 시 결제 멱등성 보장과 재처리 검증 |
+| [#12](../../issues/12) | 파티션 편중 제거와 Consumer Lag 기반 KEDA 오토스케일 |
+| [#14](../../issues/14) | 다중 티켓 재고 관리와 DLQ 보상 트랜잭션 정합성 |
+| [#16](../../issues/16) | Eager 리밸런싱으로 인한 스케일 아웃 지연 *(진행 중)* |
+
+**현재 한계:** 검증이 수동 요청과 로그 확인에 의존하고 있어, Testcontainers 기반 자동화 테스트를 준비 중입니다.
 
 ---
 
-## ⚡ 빠른 시작 (로컬 실행 순서)
+## 빠른 시작 (로컬 실행 순서)
 
 로컬 minikube에서 **처음부터 끝까지** 따라 하는 순서입니다. 명령은 **저장소 루트**에서 실행합니다.
 
@@ -224,7 +241,7 @@ kubectl exec <kafka-1 팟 이름> -- kafka-consumer-groups `
 echo "🔥 대용량 예매 부하 테스트 시작 (10000건 동시 요청 비동기 쉘 발사)..."
 
 // Mac or linux
-for i in {1..5000}; do curl -X POST "http://localhost:8085/reserve" -H "Content-Type: application/json" -d "{\"userId\":\"user$i\", \"ticketId\":\"ticket:stock:god\"}" & done wait
+for i in {1..3000}; do curl -X POST "http://localhost:8085/reserve" -H "Content-Type: application/json" -d "{\"userId\":\"user$i\", \"ticketId\":\"ticket:stock:god\"}" & done wait
 echo "✅ 10000건의 분산 요청 발사 완료. 컨슈머 리스너 메트릭 확인 필요."
 
 //  Windows
