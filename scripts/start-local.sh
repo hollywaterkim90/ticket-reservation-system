@@ -100,11 +100,21 @@ fi
 # [4/6] 인프라 배포 (Kafka x3 / Redis / ES / Kibana / Kafka-UI + 토픽)
 # ---------------------------------------------------------------------
 echo "==> [4/6] 인프라 배포 및 토픽 생성 대기"
+# 완료된 Job 은 apply 로 재실행되지 않는다. 브로커에 볼륨이 없어 팟이 재시작되면
+# 토픽이 사라지는데 Job 은 Complete 로 남아 있어 토픽이 복구되지 않으므로, 매번 지우고 다시 만든다.
+# (Job 스크립트 자체에 브로커 대기 루프가 있어 순서는 문제되지 않는다)
+kubectl delete job init-kafka-topics --ignore-not-found >/dev/null 2>&1
 kubectl apply -f "$INFRA/infra.yaml" >/dev/null || fail "인프라 배포 실패"
 for d in kafka-1 kafka-2 kafka-3; do
   kubectl rollout status "deployment/$d" --timeout=180s >/dev/null || fail "$d 기동 실패"
 done
 kubectl wait --for=condition=complete job/init-kafka-topics --timeout=180s >/dev/null 2>&1 || true
+
+# 토픽이 실제로 만들어졌는지 확인 — 없으면 이후 단계가 전부 무의미하다
+topics="$(kubectl exec deploy/kafka-1 -- kafka-topics --bootstrap-server localhost:9092 --list 2>/dev/null)"
+for t in ticket-reservations ticket-payments ticket-reservations.DLQ; do
+  echo "$topics" | grep -qx "$t" || fail "토픽 '$t' 생성 실패 — kubectl logs job/init-kafka-topics 확인"
+done
 echo "    Kafka 3 브로커 및 토픽 준비 완료"
 
 # ---------------------------------------------------------------------
