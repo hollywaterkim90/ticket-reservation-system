@@ -19,7 +19,7 @@ public class RedisDataInitializer {
 
     @EventListener(ApplicationReadyEvent.class)
     public void init() {
-        // 1. 현재 Redis DB의 모든 키 삭제
+        // 1. 현재 Redis DB의 모든 키 삭제 (부하 테스트 반복용, 데모 전용)
         redisTemplate.execute((RedisCallback<Object>) connection -> {
             connection.serverCommands().flushDb();
             return null;
