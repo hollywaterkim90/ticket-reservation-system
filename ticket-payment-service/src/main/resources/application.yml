@@ -9,6 +9,11 @@ custom:
       indexer: ticket-group-es-indexer     # ES 색인용 그룹
       dlq: ticket-dlq-group                # DLQ 처리용 그룹
 
+# OutboxRelay 폴링 주기(ms)
+outbox:
+  relay:
+    interval-ms: 1000
+
 spring:
   kafka:
     bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
@@ -64,6 +69,16 @@ spring:
     redis:
       host: localhost
       port: 6379
+
+  # Transactional Outbox 저장소(Postgres): payment_record / outbox_event 소유
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ticketing
+    username: ticketing
+    password: ticketing
+  jpa:
+    hibernate:
+      ddl-auto: update   # 데모용. 엔티티로부터 payment_record/outbox_event 테이블 생성.
+    open-in-view: false
 
 logging:
   level:
