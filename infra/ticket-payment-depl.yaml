@@ -33,6 +33,13 @@ spec:
           value: "local-redis"
         - name: SPRING_DATA_REDIS_PORT
           value: "6379"
+        # Transactional Outbox 저장소(Postgres): payment_record / outbox_event
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://local-postgres:5432/ticketing"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "ticketing"
+        - name: SPRING_DATASOURCE_PASSWORD
+          value: "ticketing"
         # spring.elasticsearch.uris
         - name: SPRING_ELASTICSEARCH_URIS
           value: "http://local-elasticsearch:9200"
