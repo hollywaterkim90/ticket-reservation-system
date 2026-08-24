@@ -14,31 +14,43 @@ java {
     }
 }
 
+// Spring Boot 3.3.1 이 고정하는 Testcontainers 1.19.8(docker-java 3.3.6)은
+// Docker Engine 29.x(API 1.54)와 통신하지 못해 /info 가 400 으로 떨어진다. 상향 고정.
+ext['testcontainers.version'] = '1.21.3'
+
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    // 1. 스프링 웹 (Producer에서 REST API 만들 때 필요)
     implementation 'org.springframework.boot:spring-boot-starter-web'
-
-    // 2. 스프링 카프카 (핵심 연동 라이브러리)
     implementation 'org.springframework.kafka:spring-kafka'
-
-    // 3. Spring Data Elasticsearch
     implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
 
-    // 4. 롬복 (Lombok)
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
+
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    runtimeOnly 'org.postgresql:postgresql'
 
     // 테스트 의존성
     testImplementation platform('org.junit:junit-bom:6.0.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:kafka'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 }
 
 test {
     useJUnitPlatform()
+
+    // docker-java 는 API 버전을 지정하지 않으면 v1.32 로 요청하는데,
+    // Docker Engine 29.x 는 최소 1.40 을 요구하므로 /info 가 400 으로 떨어져
+    // Testcontainers 가 "Could not find a valid Docker environment" 로 실패한다.
+    // 1.43 은 Docker 24~29 가 모두 지원하는 구간이라 머신마다 Docker 버전이 달라도 안전하다.
+    systemProperty 'api.version', '1.43'
 }
