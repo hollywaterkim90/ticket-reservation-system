@@ -2,6 +2,8 @@ package org.example.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
@@ -30,7 +32,8 @@ public class OutboxEvent {
     @Column(columnDefinition = "text")
     private String payload;  // 발행할 DTO 의 JSON
 
-    private String status;   // NEW → SENT
+    @Enumerated(EnumType.STRING)   // ORDINAL 은 enum 순서가 바뀌면 기존 데이터가 깨진다
+    private OutboxStatus status;
 
     private Instant createdAt;
 }

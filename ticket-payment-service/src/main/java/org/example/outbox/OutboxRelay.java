@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.domain.OutboxEvent;
+import org.example.domain.OutboxStatus;
 import org.example.dto.TicketReservationDto;
 import org.example.repository.OutboxEventRepository;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -41,7 +42,7 @@ public class OutboxRelay {
             try {
                 TicketReservationDto dto = objectMapper.readValue(e.getPayload(), TicketReservationDto.class);
                 kafkaTemplate.send(e.getTopic(), e.getMsgKey(), dto).get(5, TimeUnit.SECONDS);
-                e.setStatus("SENT");
+                e.setStatus(OutboxStatus.SENT);
                 sent++;
             } catch (Exception ex) {
                 log.error("❌ outbox 발행 실패 id:{} → 다음 주기 재시도. cause:{}", e.getId(), ex.getMessage());
