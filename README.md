@@ -3,7 +3,7 @@
 동시 예매 요청 환경에서 Kafka 를 다루며 마주친 문제를 **재현하고 해결하는 방식**으로 학습한 프로젝트입니다.
 각 문제는 재현 → 원인 → 해결 순으로 Issue 에 기록했으며, 채택하지 않은 대안과 그 이유도 함께 남겼습니다.
 
-**구성:** Spring Boot 2개 서비스(예매/결제) · Kafka 3 브로커 · Redis · Elasticsearch · Kubernetes + KEDA
+**구성:** Spring Boot 2개 서비스(예매/결제) · Kafka 3 브로커 · Redis · PostgreSQL · Elasticsearch · Kubernetes + KEDA
 
 ## 다룬 문제
 
@@ -15,9 +15,30 @@
 | [#10](../../issues/10) | 오프셋 커밋 실패 시 결제 멱등성 보장과 재처리 검증 |
 | [#12](../../issues/12) | 파티션 편중 제거와 Consumer Lag 기반 KEDA 오토스케일 |
 | [#14](../../issues/14) | 다중 티켓 재고 관리와 DLQ 보상 트랜잭션 정합성 |
-| [#16](../../issues/16) | Eager 리밸런싱으로 인한 스케일 아웃 지연 *(진행 중)* |
+| [#16](../../issues/16) | Eager 리밸런싱의 소비 중단 제거 — Cooperative Sticky 전환과 그 대가 |
+| [#17](../../issues/17) | **ack 후 발행 구간의 이벤트 유실 제거 — Transactional Outbox** |
 
-**현재 한계:** 검증이 수동 요청과 로그 확인에 의존하고 있어, Testcontainers 기반 자동화 테스트를 준비 중입니다.
+## 경로별로 다른 일관성 전략
+
+같은 저장소 안에서 두 경로의 보장 수준을 다르게 두었습니다.
+
+| | 예매 | 결제 |
+|---|---|---|
+| 최우선 | 처리량 | 정확성 |
+| 방식 | Redis 원자적 `DECR` + 사후 보상 | Transactional Outbox |
+| 남는 위험 | 드물게 유령 재고 (정산 sweep 필요) | — |
+
+**돈이 오가는 경로에만 비싼 원자성을 적용**했습니다.
+
+## 검증
+
+멱등성 · DLQ 분기 · Outbox 릴레이 발행은 Testcontainers 로 PostgreSQL·Kafka 를 띄워 통합 테스트로 확인합니다.
+
+```bash
+cd ticket-payment-service && ./gradlew test
+```
+
+**남은 한계**는 각 이슈에 미완료 항목으로 기록해 두었습니다. 대표적으로 외부 결제 호출이 트랜잭션 안에 있어 "청구는 됐는데 기록은 실패"하는 멱등성 사각지대가 남아 있습니다([#17](../../issues/17)).
 
 ---
 
