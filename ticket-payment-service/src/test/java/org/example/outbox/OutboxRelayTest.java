@@ -6,6 +6,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.example.domain.OutboxEvent;
+import org.example.domain.OutboxStatus;
 import org.example.dto.TicketReservationDto;
 import org.example.repository.OutboxEventRepository;
 import org.junit.jupiter.api.Test;
@@ -82,7 +83,7 @@ class OutboxRelayTest {
                 .topic("ticket-payments")
                 .msgKey(dto.getUserId())
                 .payload(objectMapper.writeValueAsString(dto))
-                .status("NEW")
+                .status(OutboxStatus.NEW)
                 .createdAt(Instant.now())
                 .build());
 
@@ -95,7 +96,7 @@ class OutboxRelayTest {
         assertThat(received.value()).contains("order-1");       // payload 에 orderId 포함
 
         // then-2: 발행 성공했으니 그 outbox 행은 SENT (실패였다면 NEW 로 남아 다음 주기 재시도 = at-least-once)
-        assertThat(outboxRepository.findById(outboxId).orElseThrow().getStatus()).isEqualTo("SENT");
+        assertThat(outboxRepository.findById(outboxId).orElseThrow().getStatus()).isEqualTo(OutboxStatus.SENT);
     }
 
     // 검증용 컨슈머: earliest 로 처음부터 읽어, 구독이 발행보다 늦어도 메시지를 놓치지 않는다.

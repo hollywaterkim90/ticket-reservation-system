@@ -1,11 +1,15 @@
 package org.example.domain;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+
+import org.example.dto.PaymentStatus;
 
 import java.time.Instant;
 
@@ -24,7 +28,8 @@ public class PaymentRecord {
     private String orderId;
     private String userId;
     private String ticketId;
-    private String status;         // SUCCESS / FAILURE
+    @Enumerated(EnumType.STRING)
+    private PaymentStatus status;
     private String errorMessage;
     private Instant createdAt;
 }

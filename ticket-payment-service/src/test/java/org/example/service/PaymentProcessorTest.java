@@ -2,6 +2,7 @@ package org.example.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.domain.OutboxEvent;
+import org.example.dto.PaymentStatus;
 import org.example.dto.TicketReservationDto;
 import org.example.repository.OutboxEventRepository;
 import org.example.repository.PaymentRecordRepository;
@@ -55,7 +56,7 @@ class PaymentProcessorTest {
         // then: 결제기록 1건, 아웃박스 1건, 상태 SUCCESS
         assertThat(paymentRepository.count()).isEqualTo(1);
         assertThat(outboxRepository.count()).isEqualTo(1);
-        assertThat(paymentRepository.findAll().get(0).getStatus()).isEqualTo("SUCCESS");
+        assertThat(paymentRepository.findAll().get(0).getStatus()).isEqualTo(PaymentStatus.SUCCESS);
 
         // ▶ 왜 1건인가: 2번째 호출은 existsById(orderId) 에서 걸려 PG 재호출 없이 스킵.
         //   = 오프셋 재처리로 같은 메시지가 다시 와도 이중결제/중복이벤트가 안 생긴다는 증명.
@@ -74,8 +75,8 @@ class PaymentProcessorTest {
         sut.processAndStage(fail);
 
         // then: 결제기록 상태 — 정상=SUCCESS, user300=FAILURE
-        assertThat(paymentRepository.findById("order-ok").orElseThrow().getStatus()).isEqualTo("SUCCESS");
-        assertThat(paymentRepository.findById("order-fail").orElseThrow().getStatus()).isEqualTo("FAILURE");
+        assertThat(paymentRepository.findById("order-ok").orElseThrow().getStatus()).isEqualTo(PaymentStatus.SUCCESS);
+        assertThat(paymentRepository.findById("order-fail").orElseThrow().getStatus()).isEqualTo(PaymentStatus.FAILURE);
 
         // then: 아웃박스 topic — 성공은 ticket-payments, 실패는 DLQ (msgKey = userId 로 매칭)
         assertThat(outboxRepository.findAll())

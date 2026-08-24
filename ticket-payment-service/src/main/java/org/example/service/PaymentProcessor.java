@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.domain.OutboxEvent;
+import org.example.domain.OutboxStatus;
 import org.example.domain.PaymentRecord;
 import org.example.dto.PaymentStatus;
 import org.example.dto.TicketReservationDto;
@@ -60,8 +61,8 @@ public class PaymentProcessor {
         }
 
         // 3. 결제 결과 + 발행 이벤트를 같은 트랜잭션에 커밋 (원자성의 핵심)
-        String status = success ? PaymentStatus.SUCCESS.name() : PaymentStatus.FAILURE.name();
-        event.setStatus(status);
+        PaymentStatus status = success ? PaymentStatus.SUCCESS : PaymentStatus.FAILURE;
+        event.setStatus(status.name());
         event.setErrorMessage(errorMessage);
 
         paymentRepository.save(new PaymentRecord(
@@ -73,7 +74,7 @@ public class PaymentProcessor {
                 .topic(topic)
                 .msgKey(event.getUserId())
                 .payload(toJson(event))
-                .status("NEW")
+                .status(OutboxStatus.NEW)
                 .createdAt(Instant.now())
                 .build());
 
