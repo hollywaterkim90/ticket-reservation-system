@@ -1,4 +1,4 @@
-package org.example.elasticsearch.document;
+package org.example.indexer.document;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
