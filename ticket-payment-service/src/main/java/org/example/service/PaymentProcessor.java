@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -36,6 +35,7 @@ public class PaymentProcessor {
     private final PaymentRecordRepository paymentRepository;
     private final OutboxEventRepository outboxRepository;
     private final ObjectMapper objectMapper;
+    private final PaymentGateway paymentGateway;
 
     @Transactional
     public void processAndStage(TicketReservationDto event) {
@@ -54,7 +54,7 @@ public class PaymentProcessor {
         boolean success = true;
         String errorMessage = null;
         try {
-            callPg(event);
+            paymentGateway.charge(event);
         } catch (Exception e) {
             success = false;
             errorMessage = e.getMessage();
@@ -79,14 +79,6 @@ public class PaymentProcessor {
                 .build());
 
         log.info("💳 [결제 {}] orderId:{} → outbox({}) 적재", status, orderId, topic);
-    }
-
-    // 모의 PG 연동: user300 은 잔액 부족으로 실패, 그 외는 500ms 후 승인.
-    private void callPg(TicketReservationDto event) throws InterruptedException {
-        if (Objects.equals(event.getUserId(), "user300")) {
-            throw new IllegalStateException("PG사 잔액 부족 또는 카드 정보 오류");
-        }
-        Thread.sleep(500);
     }
 
     private String toJson(TicketReservationDto dto) {
