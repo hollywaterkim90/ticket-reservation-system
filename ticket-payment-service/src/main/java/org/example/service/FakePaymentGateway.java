@@ -1,6 +1,5 @@
 package org.example.service;
 
-import org.example.dto.TicketReservationDto;
 import org.springframework.stereotype.Service;
 
 import java.util.Objects;
@@ -12,9 +11,11 @@ import java.util.Objects;
 @Service
 public class FakePaymentGateway implements PaymentGateway {
 
+    // ponytail: 멱등키 계약을 문서로만 두고 실제로 강제하지는 않는다(같은 orderId 를 두 번 부르면 두 번 청구된다).
+    //           미확정 건을 재호출로 확정하는 #28 스윕에서 필요해지므로, 그때 처리 결과를 키로 기억하게 만든다.
     @Override
-    public void charge(TicketReservationDto event) {
-        if (Objects.equals(event.getUserId(), "user300")) {
+    public void charge(String orderId, String userId) {
+        if (Objects.equals(userId, "user300")) {
             throw new IllegalStateException("PG사 잔액 부족 또는 카드 정보 오류");
         }
         try {

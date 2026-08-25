@@ -1,7 +1,7 @@
 package org.example.service;
 
 import org.example.domain.OutboxEvent;
-import org.example.dto.PaymentStatus;
+import org.example.domain.PaymentStatus;
 import org.example.dto.TicketReservationDto;
 import org.example.repository.OutboxEventRepository;
 import org.example.repository.PaymentRecordRepository;
@@ -24,6 +24,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -104,7 +105,7 @@ class PaymentProcessorTest {
     void stagesFailureToDlqInsteadOfThrowing() {
         // given: PG 가 결제를 거절하는 상황을 직접 주입한다(특정 유저에 기대지 않는다).
         doThrow(new IllegalStateException("PG사 잔액 부족 또는 카드 정보 오류"))
-                .when(paymentGateway).charge(any(TicketReservationDto.class));
+                .when(paymentGateway).charge(anyString(), anyString());
         TicketReservationDto reservation = reservation("user1", "order-fail");
 
         // when
@@ -142,30 +143,42 @@ class PaymentProcessorTest {
 
         // 그리고 PG 결제는 딱 한 번만 불렸다 = 재처리로 이중 청구가 되지 않는다.
         // (멱등 가드가 charge 아래로 밀리는 변이가 생기면 여기서 2회로 잡힌다)
-        verify(paymentGateway, times(1)).charge(any(TicketReservationDto.class));
+        verify(paymentGateway, times(1)).charge(anyString(), anyString());
     }
 
     /**
-     * 원자성 — 결제기록은 저장됐는데 이벤트 적재에서 실패하면, 결제기록도 함께 롤백된다.
+     * 원자성 — 이벤트 적재가 실패하면 <b>결과 확정도 함께 롤백</b>되어 PENDING 으로 남는다.
      * <p>
-     * 둘이 따로 커밋된다면 "결제는 남았는데 발행할 이벤트는 없는" 상태가 되고, 이건 릴레이도 복구할 수 없다.
+     * 둘이 따로 커밋된다면 "결제는 확정됐는데 발행할 이벤트는 없는" 상태가 되고, 이건 릴레이도 복구할 수 없다.
      * Transactional Outbox 를 도입한 이유가 이 테스트다.
+     * <p>
+     * <b>기록 자체는 사라지지 않는다.</b> PENDING 은 청구보다 먼저 tx1 에서 커밋됐기 때문이며,
+     * 그것이 2단계로 나눈 목적이다 — 청구가 나갔을 수 있다는 흔적이 남아야 나중에 확정할 수 있다.
+     * 남은 PENDING 은 스윕 배치가 확정한다(#28).
+     * <p>
+     * 이 테스트가 잡아내는 변이는 <b>확정과 적재를 서로 다른 트랜잭션으로 나누는 것</b>이다.
+     * 그러면 확정만 커밋되어 SUCCESS 인데 발행할 이벤트가 없는 상태가 되고, 여기서 PENDING 기대가 깨진다.
+     * (tx2 를 트랜잭션 없이 실행하는 변이는 이 테스트가 아니라 나머지 세 건이 잡는다 —
+     *  더티 체킹이 동작하지 않아 확정 자체가 일어나지 않기 때문이다.)
      */
     @Test
-    void rollsBackPaymentWhenOutboxSaveFails() {
+    void keepsPaymentPendingWhenOutboxSaveFails() {
         // given: outbox 저장이 실패하는 상황을 준비한다. 여기서 던져지는 게 아니라,
-        //        processAndStage 안에서 outboxRepository.save(...) 를 부르는 순간 던져지도록 등록만 한다.
+        //        tx2 안에서 outboxRepository.save(...) 를 부르는 순간 던져지도록 등록만 한다.
         //        (DB 장애·제약 위반 등 커밋 직전 실패의 대역. paymentRepository 는 정상 동작한다)
         doThrow(new IllegalStateException("outbox 저장 실패"))
                 .when(outboxRepository).save(any(OutboxEvent.class));
 
-        // when: 프로세서는 ①결제기록 저장 → ②이벤트 적재 순서로 진행한다.
-        //       ①은 정상 통과하고 ②에서 위 예외가 터진다.
+        // when: tx1(PENDING 선점) → PG 청구 → tx2(확정 + 적재) 중 tx2 에서 터진다
         assertThatThrownBy(() -> paymentProcessor.processAndStage(reservation("user1", "order-atomic")))
                 .isInstanceOf(IllegalStateException.class);
 
-        // then: ①에서 저장했던 결제기록이 남아 있으면 안 된다
-        assertThat(paymentRepository.findById("order-atomic")).isEmpty();
+        // then: 확정이 롤백되어 PENDING 그대로다 (SUCCESS 로 넘어가지 않았다)
+        assertThat(paymentRepository.findById("order-atomic").orElseThrow().getStatus())
+                .isEqualTo(PaymentStatus.PENDING);
+
+        // 그리고 발행할 이벤트는 하나도 남지 않았다
+        assertThat(outboxRepository.findAll()).isEmpty();
     }
 
     private TicketReservationDto reservation(String userId, String orderId) {
