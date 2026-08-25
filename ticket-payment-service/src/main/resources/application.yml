@@ -15,6 +15,12 @@ outbox:
     interval-ms: 1000        # 폴링 주기
     send-timeout-ms: 5000    # 브로커 ack 대기 시간
 
+# 미확정(PENDING) 결제 스윕 설정
+payment:
+  sweep:
+    interval-ms: 10000       # 스윕 주기
+    stale-after-ms: 30000    # 이만큼 지난 PENDING 을 미확정으로 본다(PG 청구 500ms 대비 넉넉히)
+
 spring:
   kafka:
     bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
