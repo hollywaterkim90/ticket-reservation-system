@@ -6,7 +6,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.example.domain.OutboxEvent;
-import org.example.domain.OutboxStatus;
 import org.example.dto.TicketReservationDto;
 import org.example.repository.OutboxEventRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -74,17 +73,17 @@ class OutboxRelayTest {
 
     @BeforeEach
     void clean() {
-        // 릴레이는 NEW 행을 무조건 집어간다. 앞 테스트가 남긴 행이 섞이면 검증이 흔들리므로 비우고 시작한다.
+        // 릴레이는 남아 있는 행을 무조건 집어간다. 앞 테스트가 남긴 행이 섞이면 검증이 흔들리므로 비우고 시작한다.
         outboxRepository.deleteAll();
     }
 
     /**
-     * 릴레이가 NEW 행을 실제 토픽으로 발행하고 SENT 로 마킹한다.
+     * 릴레이가 남아 있는 행을 실제 토픽으로 발행하고 그 행을 지운다.
      * 여기서 처음으로 메시지가 브로커에 도달한다 — 프로세서는 적재만 했고 발행은 하지 않았다.
      */
     @Test
-    void publishesNewRowAndMarksItSent() throws Exception {
-        // given: 발행 대기(NEW) outbox 1건 — topic=ticket-payments, payload=DTO JSON
+    void publishesPendingRowAndDeletesIt() throws Exception {
+        // given: 발행 대기 outbox 1건 — topic=ticket-payments, payload=DTO JSON
         TicketReservationDto dto = TicketReservationDto.builder()
                 .userId("user1")
                 .orderId("order-1")
@@ -97,11 +96,10 @@ class OutboxRelayTest {
                 .topic("ticket-payments")
                 .msgKey(dto.getUserId())
                 .payload(objectMapper.writeValueAsString(dto))
-                .status(OutboxStatus.NEW)
                 .createdAt(Instant.now())
                 .build());
 
-        // when: 릴레이 1회 수동 실행 (내부에서 SKIP LOCKED 로 NEW 행 잠그고 → 발행 → SENT)
+        // when: 릴레이 1회 수동 실행 (내부에서 SKIP LOCKED 로 행을 잠그고 → 발행 → 삭제)
         relay.publishPending();
 
         // then-1: 실제 ticket-payments 토픽에 그 메시지가 도착했는가
@@ -109,17 +107,18 @@ class OutboxRelayTest {
         assertThat(received.key()).isEqualTo("user1");          // msgKey = userId
         assertThat(received.value()).contains("order-1");       // payload 에 orderId 포함
 
-        // then-2: 발행 성공했으니 그 outbox 행은 SENT (실패였다면 NEW 로 남아 다음 주기 재시도 = at-least-once)
-        assertThat(outboxRepository.findById(outboxId).orElseThrow().getStatus()).isEqualTo(OutboxStatus.SENT);
+        // then-2: 발행에 성공했으니 그 행은 사라진다.
+        // 발행 이력은 남기지 않는다 — 발행된 메시지는 Kafka 가 보관하므로 사본을 둘 이유가 없다.
+        assertThat(outboxRepository.findById(outboxId)).isEmpty();
     }
 
     /**
-     * at-least-once — 발행에 실패한 행은 SENT 로 넘어가지 않고 NEW 로 남아 다음 주기에 다시 집힌다.
-     * 실패 행을 SENT 로 마킹해버리면 그 순간 이벤트는 영구 유실이고, Outbox 를 도입한 이유가 사라진다.
+     * at-least-once — 발행에 실패한 행은 지워지지 않고 남아 다음 주기에 다시 집힌다.
+     * 실패 행까지 지워버리면 그 순간 이벤트는 영구 유실이고, Outbox 를 도입한 이유가 사라진다.
      * 재시도로 생기는 중복 발행은 소비측 멱등성(orderId)이 흡수한다.
      */
     @Test
-    void keepsFailedRowAsNewForRetry() {
+    void keepsFailedRowForRetry() {
         // given: 릴레이가 발행 도중 실패하는 행 1건 (payload 가 DTO 로 역직렬화되지 않는다)
         //        브로커 ack 실패든 직렬화 실패든, 릴레이 입장에서는 "발행을 확정하지 못한 행"으로 같다.
         String outboxId = UUID.randomUUID().toString();
@@ -128,7 +127,6 @@ class OutboxRelayTest {
                 .topic("ticket-payments")
                 .msgKey("user1")
                 .payload("{ 이건 JSON 이 아니다 }")
-                .status(OutboxStatus.NEW)
                 .createdAt(Instant.now())
                 .build());
 
@@ -136,7 +134,7 @@ class OutboxRelayTest {
         relay.publishPending();
 
         // then
-        assertThat(outboxRepository.findById(outboxId).orElseThrow().getStatus()).isEqualTo(OutboxStatus.NEW);
+        assertThat(outboxRepository.findById(outboxId)).isPresent();
 
         // ⚠️ 남은 과제: 지금 구조는 재시도 횟수 제한이 없어 이런 독성 메시지가 영구히 재시도된다.
         //    (attempt_count + 임계치 초과 시 FAILED 격리가 정석)

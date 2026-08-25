@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.domain.OutboxEvent;
-import org.example.domain.OutboxStatus;
 import org.example.domain.PaymentRecord;
 import org.example.dto.PaymentStatus;
 import org.example.dto.TicketReservationDto;
@@ -74,7 +73,6 @@ public class PaymentProcessor {
                 .topic(topic)
                 .msgKey(event.getUserId())
                 .payload(toJson(event))
-                .status(OutboxStatus.NEW)
                 .createdAt(Instant.now())
                 .build());
 
