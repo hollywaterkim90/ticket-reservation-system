@@ -47,8 +47,8 @@ class OutboxRelayTest {
     /**
      * 릴레이 경로에 필요한 빈만 올리는 테스트 전용 부트 클래스.
      * <p>
-     * 운영 진입점({@code Main})을 쓰면 {@code org.example.listener} 까지 스캔되어
-     * TicketConsumerListener 가 Elasticsearch 리포지토리를 요구하는데, 릴레이 검증과는 무관하다.
+     * 운영 진입점({@code Main})을 쓰면 {@code org.example.indexer} 까지 스캔되어
+     * TicketIndexListener 가 Elasticsearch 리포지토리를 요구하는데, 릴레이 검증과는 무관하다.
      * 스캔 범위를 outbox 로 좁혀 리스너 자체가 생성되지 않게 한다.
      * (ES 자동설정을 제외할 필요도 없어진다 — 쓰는 빈이 없으므로)
      */

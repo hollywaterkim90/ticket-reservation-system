@@ -3,28 +3,26 @@ package org.example.listener;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.dto.TicketReservationDto;
-import org.example.elasticsearch.document.TicketReservationDocument;
-import org.example.elasticsearch.repository.TicketReservationElasticRepository;
 import org.example.service.PaymentProcessor;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
 
+/**
+ * 예매 이벤트를 소비해 결제를 처리한다. 결제 결과의 ES 색인은 {@code org.example.indexer} 가 담당한다.
+ * (같은 파이프라인이지만 관심사와 장애 영향 범위가 달라 분리했다.)
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class TicketConsumerListener {
 
     private final PaymentProcessor paymentProcessor;
-    private final TicketReservationElasticRepository repository;
 
     // 결제 워커 스레드 풀 격리: Kafka 메인 리스너 스레드와 분리해 PG 연동(블로킹)을 병렬 처리한다.
     private final ExecutorService paymentExecutor = Executors.newFixedThreadPool(50);
@@ -50,21 +48,5 @@ public class TicketConsumerListener {
 
         ack.acknowledge();
         log.info("✅ [Batch Finished] 오프셋 커밋 완료 ({}건)", records.size());
-    }
-
-    @KafkaListener(topics = "ticket-payments", groupId = "${custom.kafka.groups.indexer}")
-    public void consumePayment(List<TicketReservationDto> records) {
-        List<TicketReservationDocument> documents = records.stream()
-                .filter(Objects::nonNull)
-                .map(event -> TicketReservationDocument.builder()
-                        .orderId(event.getOrderId())
-                        .status(event.getStatus())
-                        .timestamp(Instant.now())
-                        .build())
-                .collect(Collectors.toList());
-
-        if (!documents.isEmpty()) {
-            repository.saveAll(documents);
-        }
     }
 }
