@@ -25,6 +25,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 /**
  * {@link PaymentProcessor} — "결제 결과 + 발행할 이벤트"를 <b>하나의 트랜잭션</b>으로 커밋하는지 검증.
@@ -63,6 +65,9 @@ class PaymentProcessorTest {
     /** 마지막 테스트에서 "outbox 저장만 실패"를 만들기 위해 스파이로 받는다. 그 외에는 실제 저장소로 동작한다. */
     @SpyBean OutboxEventRepository outboxRepository;
 
+    /** 실패 테스트에서 "PG 가 거절하는 상황"을 직접 주입하려고 스파이로 받는다. 그 외에는 실제 FakePaymentGateway 로 동작한다. */
+    @SpyBean PaymentGateway paymentGateway;
+
     @BeforeEach
     void cleanUp() {
         // 롤백에 기대지 않고 실제로 커밋하므로 이전 테스트가 남긴 데이터를 직접 지운다.
@@ -97,8 +102,10 @@ class PaymentProcessorTest {
      */
     @Test
     void stagesFailureToDlqInsteadOfThrowing() {
-        // given: user300 은 모의 PG 가 잔액 부족으로 거절하는 유저
-        TicketReservationDto reservation = reservation("user300", "order-fail");
+        // given: PG 가 결제를 거절하는 상황을 직접 주입한다(특정 유저에 기대지 않는다).
+        doThrow(new IllegalStateException("PG사 잔액 부족 또는 카드 정보 오류"))
+                .when(paymentGateway).charge(any(TicketReservationDto.class));
+        TicketReservationDto reservation = reservation("user1", "order-fail");
 
         // when
         paymentProcessor.processAndStage(reservation);
@@ -132,6 +139,10 @@ class PaymentProcessorTest {
         // 결제 확정 시각도 그대로다 = 두 번째 호출이 정말 아무것도 하지 않았다는 뜻
         assertThat(paymentRepository.findById("order-1").orElseThrow().getCreatedAt())
                 .isEqualTo(firstCreatedAt);
+
+        // 그리고 PG 결제는 딱 한 번만 불렸다 = 재처리로 이중 청구가 되지 않는다.
+        // (멱등 가드가 charge 아래로 밀리는 변이가 생기면 여기서 2회로 잡힌다)
+        verify(paymentGateway, times(1)).charge(any(TicketReservationDto.class));
     }
 
     /**
