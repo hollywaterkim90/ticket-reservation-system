@@ -38,7 +38,9 @@
 cd ticket-payment-service && ./gradlew test
 ```
 
-**남은 한계**는 각 이슈에 미완료 항목으로 기록해 두었습니다. 대표적으로 외부 결제 호출이 트랜잭션 안에 있어 "청구는 됐는데 기록은 실패"하는 멱등성 사각지대가 남아 있습니다([#17](../../issues/17)).
+**남은 한계**는 각 이슈에 미완료 항목으로 기록해 두었습니다.
+
+한때 외부 결제 호출이 트랜잭션 안에 있어 "청구는 됐는데 기록은 실패"하는 멱등성 사각지대가 있었고, 이후 **PENDING 선점 → PG 청구 → 결과 확정의 2단계로 분리**해 해결했습니다([#21](../../issues/21)). 그 분리가 남기는 미확정 건은 **스윕 배치**가 확정합니다([#28](../../issues/28)). 재청구는 `orderId` 를 멱등키로 넘겨 막되, 실제 PG 멱등키에는 유효기간이 있으므로 **확정이 그 안에 끝나야 한다**는 운영 제약이 남습니다.
 
 ---
 
@@ -275,8 +277,8 @@ for /L %i in (1,1,5000) do curl -X POST "http://localhost:8085/reserve" -H "Cont
 ⚡ 비동기 스레드 풀 격리 (Thread Pool Isolation)
 대량 분산 환경에서의 컨슈머 블로킹을 방지하기 위해, Kafka 메인 리스너 스레드와 결제 워커 스레드를 분리했습니다. CompletableFuture.supplyAsync와 고정 스레드 풀(paymentExecutor)을 조합하여 대량의 요청을 병렬 처리합니다.
 
-🛡️ Redis 분산 멱등성 락 (Idempotency Barrier)
-비동기 결제 로직 최상단에서 Redis 내 order:status:{orderId} 상태를 선점 조회합니다. 이미 처리 완료된 주문(SUCCESS/FAILURE)은 외부 PG사 API 연동을 타지 않고 즉시 스킵(⏭️ 멱등성 블로킹)시킵니다.
+🛡️ DB 기반 멱등성 (Idempotency Barrier)
+결제 기록(payment_record)의 상태로 멱등성을 판정합니다. 이미 확정된 주문(SUCCESS/FAILURE)은 외부 PG사 API 연동을 타지 않고 즉시 스킵합니다. PENDING이면 청구 결과를 모르는 상태이므로 이어서 처리하며, orderId가 멱등키라 이중 청구가 되지 않습니다. 초기에는 Redis(order:status)를 썼으나 결제 기록과 저장소가 달라 또 다른 dual write였기에 DB로 옮겼습니다.
 
 🚨 장애 격리 (Dead Letter Queue)
 비즈니스 결함(예: 잔액 부족 유저 user300)이나 타임아웃이 발생한 악성 메세지는 파이프라인을 오염시키지 않도록 ticket-reservations.DLQ 토픽으로 안전하게 격리 배송하여 보상 트랜잭션을 유도합니다.
