@@ -127,7 +127,8 @@ kubectl get pods -l app=ticket-payments-service -w    # 팟 스케일아웃
 ```
 ```bash
 # 쿠버네티스 리소스까지 내리려면
-kubectl delete -f infra/
+kubectl delete -f infra/infra.yaml     # 팟만 삭제 — 결제 기록과 토픽은 볼륨에 남는다
+kubectl delete -f infra/volumes.yaml   # 볼륨까지 삭제 — 데이터 완전 초기화
 # 클러스터 전체 종료
 minikube stop
 ```

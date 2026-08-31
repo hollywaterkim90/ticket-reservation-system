@@ -24,6 +24,8 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_MIN_INSYNC_REPLICAS: 2
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+    volumes:
+      - kafka-1-data:/tmp/kraft-combined-logs
 
   # --- Kafka Broker 2 ---
   kafka-2:
@@ -45,6 +47,8 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_MIN_INSYNC_REPLICAS: 2
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+    volumes:
+      - kafka-2-data:/tmp/kraft-combined-logs
 
   # --- Kafka Broker 3 ---
   kafka-3:
@@ -66,6 +70,8 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_MIN_INSYNC_REPLICAS: 2
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+    volumes:
+      - kafka-3-data:/tmp/kraft-combined-logs
 
   # 🚀 토픽 자동 생성을 위한 Init 컨테이너
   init-kafka:
@@ -146,3 +152,9 @@ services:
       - REDIS_CONNECTIONS=local-redis:local-redis:6379
     depends_on:
       - local-redis
+
+# 브로커 로그를 컨테이너 재생성 후에도 보존한다. 없으면 재시작 시 토픽이 전부 사라진다.
+volumes:
+  kafka-1-data:
+  kafka-2-data:
+  kafka-3-data:

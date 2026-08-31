@@ -9,7 +9,7 @@
 #     ./start-local.sh --help          도움말
 #
 #   종료:  ./stop-local.sh        (port-forward 만 정리)
-#          kubectl delete -f infra/   (배포 리소스까지 정리)
+#          kubectl delete -f infra/infra.yaml   (팟만 정리, 데이터는 볼륨에 남음)
 #          minikube stop             (클러스터 정지)
 #
 #   각 단계는 멱등(idempotent)하다. 이미 완료된 단계는 건너뛴다.
@@ -104,6 +104,7 @@ echo "==> [4/6] 인프라 배포 및 토픽 생성 대기"
 # 토픽이 사라지는데 Job 은 Complete 로 남아 있어 토픽이 복구되지 않으므로, 매번 지우고 다시 만든다.
 # (Job 스크립트 자체에 브로커 대기 루프가 있어 순서는 문제되지 않는다)
 kubectl delete job init-kafka-topics --ignore-not-found >/dev/null 2>&1
+kubectl apply -f "$INFRA/volumes.yaml" >/dev/null || fail "볼륨 생성 실패"
 kubectl apply -f "$INFRA/infra.yaml" >/dev/null || fail "인프라 배포 실패"
 for d in kafka-1 kafka-2 kafka-3; do
   kubectl rollout status "deployment/$d" --timeout=180s >/dev/null || fail "$d 기동 실패"
@@ -181,6 +182,7 @@ cat <<EOF
 
   정리:
     ./scripts/stop-local.sh      port-forward 종료
-    kubectl delete -f infra/     배포 리소스 삭제
+    kubectl delete -f infra/infra.yaml     팟 삭제 (데이터는 볼륨에 남음)
+    kubectl delete -f infra/volumes.yaml   볼륨까지 삭제 (결제 기록·토픽 소실)
     minikube stop                클러스터 정지
 EOF

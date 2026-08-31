@@ -16,6 +16,7 @@ $infra = Join-Path $repo 'infra'               # 쿠버네티스 매니페스트
 $pidFile = Join-Path $scriptDir '.local-pf-pids'
 
 Write-Host "==> [1/4] 인프라 배포 (Kafka x3 / Redis / ES / Kibana / Kafka-UI + 토픽)" -ForegroundColor Cyan
+kubectl apply -f "$infra\volumes.yaml"
 kubectl apply -f "$infra\infra.yaml"
 
 Write-Host "==> [2/4] Kafka 브로커 및 토픽 생성 대기" -ForegroundColor Cyan
