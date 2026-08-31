@@ -76,24 +76,28 @@ else
 fi
 
 # ---------------------------------------------------------------------
-# [3/6] 서비스 이미지 빌드 후 minikube 로 로드
-#   로컬 docker 로 만든 이미지는 minikube 내부에서 보이지 않으므로
-#   image load 로 밀어넣어야 한다. (imagePullPolicy: IfNotPresent)
+# [3/6] 서비스 이미지 빌드 (minikube 데몬에서 직접)
+#   예전에는 로컬 docker 로 빌드하고 `minikube image load` 로 밀어넣었다.
+#   그런데 load 는 같은 태그면 이미지를 덮어쓰지 않는다. 실행 중인 컨테이너가
+#   이미지를 잡고 있으면 `image rm` 도 실패한다. 그래서 코드를 고쳐도
+#   옛 이미지가 조용히 계속 도는 일이 실제로 벌어졌다(#33).
+#   docker-env 로 minikube 안의 데몬에 직접 빌드하면 로드 단계 자체가 없어진다.
 # ---------------------------------------------------------------------
 echo "==> [3/6] 서비스 이미지"
-build_and_load() {
+build_image() {
   local dir="$1" image="$2"
   echo "    빌드: $image"
   (cd "$REPO/$dir" && docker build -q -t "$image" . >/dev/null) || fail "$image 빌드 실패"
-  echo "    로드: $image -> minikube"
-  minikube image load "$image" || fail "$image 로드 실패"
 }
 
 if [ "$SKIP_BUILD" -eq 1 ]; then
-  echo "    --skip-build 지정 — 건너뜀"
+  echo "    --skip-build 지정 — 건너뜀 (팟은 지금 minikube 에 있는 이미지로 뜬다)"
 else
-  build_and_load "ticket-reservation-service" "ticket-reservation-service:latest"
-  build_and_load "ticket-payment-service"     "ticket-payments-service:latest"
+  # 이후 docker 명령의 대상이 로컬 데몬에서 minikube 데몬으로 바뀐다.
+  # 스크립트 프로세스 안에서만 유효하므로 사용자 셸에는 영향이 없다.
+  eval "$(minikube docker-env)" || fail "minikube docker-env 적용 실패"
+  build_image "ticket-reservation-service" "ticket-reservation-service:latest"
+  build_image "ticket-payment-service"     "ticket-payments-service:latest"
 fi
 
 # ---------------------------------------------------------------------
