@@ -28,9 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest(
         classes = PaymentSweeperTest.SweepTestApp.class,
-        properties = {
-                "spring.jpa.hibernate.ddl-auto=create-drop",
-                "payment.sweep.stale-after-ms=30000"})
+        properties = "payment.sweep.stale-after-ms=30000")
 @Testcontainers
 class PaymentSweeperTest {
 
@@ -103,11 +101,11 @@ class PaymentSweeperTest {
      */
     @Test
     void confirmsStaleRejectedPayment() {
-        savePending("order-rejected", "user300", Instant.now().minusSeconds(60));
+        savePending("order-reject", "user300", Instant.now().minusSeconds(60));
 
         paymentSweeper.confirmStalePayments();
 
-        assertThat(paymentRepository.findById("order-rejected").orElseThrow().getStatus())
+        assertThat(paymentRepository.findById("order-reject").orElseThrow().getStatus())
                 .isEqualTo(PaymentStatus.FAILURE);
         assertThat(outboxRepository.findAll()).singleElement()
                 .satisfies(e -> assertThat(e.getTopic()).isEqualTo("ticket-reservations.DLQ"));

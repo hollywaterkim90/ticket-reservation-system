@@ -1,5 +1,6 @@
 package org.example.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -29,12 +30,22 @@ import java.time.Instant;
 @AllArgsConstructor
 public class PaymentRecord {
     @Id
+    @Column(length = 13)                       // TSID 는 13자 고정
     private String orderId;
+
+    @Column(length = 64, nullable = false)
     private String userId;
+
+    @Column(length = 64, nullable = false)
     private String ticketId;
+
     @Enumerated(EnumType.STRING)
+    @Column(length = 16, nullable = false)
     private PaymentStatus status;
-    private String errorMessage;
+
+    private String errorMessage;               // 실패했을 때만 채워지므로 NULL 허용
+
+    @Column(nullable = false)                  // 스윕 배치의 조회 조건이라 비어 있으면 영영 안 잡힌다
     private Instant createdAt;
 
     /**
