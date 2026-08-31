@@ -36,11 +36,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest(
         classes = OutboxRelayTest.RelayTestApp.class,
-        properties = {
-                // 자동 폴링 사실상 끔(600s). 테스트에서 relay.publishPending() 를 직접 1회 호출해 타이밍을 통제.
-                "outbox.relay.interval-ms=600000",
-                // 운영 설정(update)을 물려받지 않고 테스트에서만 스키마를 만들고 지운다.
-                "spring.jpa.hibernate.ddl-auto=create-drop"})
+        // 자동 폴링 사실상 끔(600s). 테스트에서 relay.publishPending() 를 직접 1회 호출해 타이밍을 통제.
+        properties = "outbox.relay.interval-ms=600000")
 @Testcontainers
 class OutboxRelayTest {
 

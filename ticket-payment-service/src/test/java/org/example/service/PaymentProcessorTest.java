@@ -40,12 +40,9 @@ import static org.mockito.Mockito.verify;
  * Postgres 컨테이너를 쓰는 이유: 여기서 만든 outbox 행을 릴레이가 {@code FOR UPDATE SKIP LOCKED}(Postgres 전용)로
  * 집어간다. H2 로는 그 경로가 검증되지 않는다.
  */
-// ddl-auto 는 운영 설정(update)을 물려받지 않고 테스트에서만 create-drop 으로 덮는다.
-// 컨테이너는 매번 빈 DB 로 뜨므로 스키마를 만들어줄 누군가가 필요하고, 끝나면 흔적 없이 지운다.
-// (운영은 validate + 마이그레이션이 정석 — 그건 별도 과제)
-@SpringBootTest(
-        classes = PaymentProcessorTest.PaymentTestApp.class,
-        properties = "spring.jpa.hibernate.ddl-auto=create-drop")
+// 스키마는 운영과 똑같이 Flyway 가 만든다(ddl-auto: validate 를 그대로 물려받는다).
+// 컨테이너가 매번 빈 DB 로 뜨므로 V1__init.sql 이 새로 적용되고, 테스트가 곧 그 DDL 의 검증이 된다.
+@SpringBootTest(classes = PaymentProcessorTest.PaymentTestApp.class)
 @Testcontainers
 class PaymentProcessorTest {
 
