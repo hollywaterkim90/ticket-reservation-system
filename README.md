@@ -17,8 +17,39 @@
 | [#14](../../issues/14) | 다중 티켓 재고 관리와 DLQ 보상 트랜잭션 정합성 |
 | [#16](../../issues/16) | Eager 리밸런싱의 소비 중단 제거 — Cooperative Sticky 전환과 그 대가 |
 | [#17](../../issues/17) | **ack 후 발행 구간의 이벤트 유실 제거 — Transactional Outbox** |
+| [#31](../../issues/31) | 로컬 인프라가 전부 휘발성 — 유실을 막으려 넣은 Outbox 의 저장소가 `emptyDir` 이던 모순 |
+| [#32](../../issues/32) | **애플리케이션이 스키마를 바꾼다 — Flyway 도입과 `ddl-auto: validate`** |
+| [#33](../../issues/33) | 옛 이미지가 조용히 계속 도는 문제 — `minikube image load` 는 같은 태그를 덮지 않는다 |
 
 ## 경로별로 다른 일관성 전략
+
+```mermaid
+flowchart TB
+  subgraph 예매["예매 경로 — 처리량 우선"]
+    C([클라이언트]) -->|POST /reserve| RS[예매 서비스]
+    RS <-->|원자적 DECR<br/>실패 시 사후 보상| R[(Redis)]
+    RS -->|produce| T1[[ticket-reservations]]
+  end
+
+  subgraph 결제["결제 경로 — 정확성 우선"]
+    T1 --> PS[결제 서비스]
+    PS -->|① PENDING 선점<br/>커밋| DB[(PostgreSQL)]
+    PS -->|② 청구<br/>트랜잭션 밖| PG[[PG]]
+    PS -->|③ 확정 + outbox<br/>한 트랜잭션| DB
+    SW[스윕 배치] -.->|미확정 PENDING 확정| DB
+    RL[OutboxRelay] -->|FOR UPDATE<br/>SKIP LOCKED| DB
+    RL -->|발행 성공 시 행 삭제| T2[[ticket-payments]]
+  end
+
+  subgraph 색인["색인 경로 — 별도 컨슈머 그룹"]
+    T2 --> IX[indexer] --> ES[(Elasticsearch)]
+  end
+
+  PS -.->|실패| DLQ[[ticket-reservations.DLQ]]
+```
+
+예매 경로는 Redis 왕복 한 번으로 끝나고, 결제 경로는 ①②③ 3단계에 릴레이와 스윕까지 붙습니다.
+**비싼 원자성이 어디에 붙어 있는지가 그림의 길이로 드러납니다.**
 
 같은 저장소 안에서 두 경로의 보장 수준을 다르게 두었습니다.
 
@@ -37,6 +68,23 @@
 ```bash
 cd ticket-payment-service && ./gradlew test
 ```
+
+### 측정한 수치
+
+직접 측정한 값만 적었습니다. 측정 환경과 방법은 각 이슈에 있습니다.
+
+| 항목 | 값 | 출처 |
+|---|---|---|
+| 파티션 분포 (4,132건) | 1,471 / 1,632 / 1,029 | [#12](../../issues/12) |
+| KEDA 오토스케일 | 1 → 3 → 1 (lag 임계치 30) | [#12](../../issues/12) |
+| Cooperative Sticky 합류 | 30초 (2라운드 × `max.poll.interval.ms` 15초) | [#16](../../issues/16) |
+| 스케일 다운 반납 | 8.4초 (1라운드 — 떠나는 멤버는 즉시 반납) | [#16](../../issues/16) |
+| 통합 테스트 | 12종 (Testcontainers: PostgreSQL + Kafka) | [#20](../../issues/20) · [#28](../../issues/28) |
+
+합류가 **느려진** 것은 의도한 교환입니다. Eager 는 13초 만에 합류하지만 그 구간 전체 소비가 멈추고,
+Cooperative 는 30초가 걸리는 대신 **리밸런싱 중에도 나머지 파티션이 계속 소비됩니다.**
+이 30초는 줄일 수 없습니다 — `max.poll.interval.ms` 를 낮추면 PG 지연 허용치가 함께 낮아져
+DLQ 유입이 늘어나기 때문입니다([#16](../../issues/16)).
 
 **남은 한계**는 각 이슈에 미완료 항목으로 기록해 두었습니다.
 
@@ -68,21 +116,22 @@ helm install keda kedacore/keda --namespace keda --create-namespace
 kubectl get crd scaledobjects.keda.sh
 ```
 
-### STEP 3. 애플리케이션 이미지 빌드 → minikube 로드
-**스크립트는 이미지를 빌드하지 않습니다.** 배포 전에 두 서비스 이미지를 만들어 minikube 안으로 넣어야 합니다. (로컬 docker로 빌드한 이미지는 minikube가 자동으로 못 보기 때문)
-```bash
-# 예매 서비스
-cd ticket-reservation-service
-docker build -t ticket-reservation-service:latest .
-minikube image load ticket-reservation-service:latest
-cd ..
+### STEP 3. 애플리케이션 이미지 빌드
+`start-local.sh` 가 빌드까지 수행하므로 **평소에는 이 단계를 건너뛰어도 됩니다.** 수동으로 빌드한다면:
 
-# 결제 서비스
-cd ticket-payment-service
-docker build -t ticket-payments-service:latest .
-minikube image load ticket-payments-service:latest
-cd ..
+```bash
+# minikube 안의 도커 데몬으로 전환한 뒤 빌드한다.
+# 이 환경변수는 현재 셸에만 적용되며, `eval $(minikube docker-env -u)` 로 되돌린다.
+eval $(minikube docker-env)
+
+(cd ticket-reservation-service && docker build -t ticket-reservation-service:latest .)
+(cd ticket-payment-service     && docker build -t ticket-payments-service:latest .)
 ```
+
+> **`minikube image load` 를 쓰지 않는 이유:** load 는 **같은 태그면 이미지를 덮어쓰지 않습니다.**
+> 실행 중인 컨테이너가 이미지를 잡고 있으면 `image rm` 도 실패합니다. 그래서 코드를 고쳐도
+> 옛 이미지가 조용히 계속 도는 사고가 있었습니다 — 팟은 `Running`, `RESTARTS 0`, 롤아웃도 성공하므로
+> **에러 없이 옛 코드가 돕니다.** minikube 데몬에서 직접 빌드하면 옮기는 단계 자체가 없어집니다([#33](../../issues/33)).
 
 ### STEP 4. 배포 + 로컬 접속 스크립트 실행
 `infra/` 의 매니페스트를 모두 apply하고, 롤아웃을 기다린 뒤, 로컬 접속용 `port-forward`까지 자동으로 띄웁니다.
@@ -126,12 +175,16 @@ kubectl get pods -l app=ticket-payments-service -w    # 팟 스케일아웃
 ./scripts/stop-local.sh
 ```
 ```bash
-# 쿠버네티스 리소스까지 내리려면
-kubectl delete -f infra/infra.yaml     # 팟만 삭제 — 결제 기록과 토픽은 볼륨에 남는다
-kubectl delete -f infra/volumes.yaml   # 볼륨까지 삭제 — 데이터 완전 초기화
+# 쿠버네티스 리소스까지 내리려면 — 순서가 있습니다
+kubectl delete -f infra/infra.yaml     # ① 팟 삭제. 결제 기록과 토픽은 볼륨에 남는다
+kubectl delete -f infra/volumes.yaml   # ② 볼륨 삭제. 데이터 완전 초기화
 # 클러스터 전체 종료
 minikube stop
 ```
+
+> **②만 먼저 실행하면 멈춥니다.** 팟이 볼륨을 잡고 있는 동안 PVC 는 `Terminating` 에서 대기합니다.
+> 데이터를 남긴 채 팟만 내리는 것이 평소 정리 방법이고, ②는 스키마를 초기화할 때만 씁니다.
+> (PVC 를 `infra.yaml` 과 분리해 둔 이유가 이것입니다 — 같은 파일에 있으면 `delete` 한 번에 데이터가 날아갑니다. [#31](../../issues/31))
 
 > 각 단계의 **원리·상세 옵션·트러블슈팅**(port-forward가 왜 필요한지, 좀비 터널 정리, KEDA 동작 원리 등)은 아래 **"2. 쿠버네티스(minikube) 배포 및 로컬 접속"** 섹션에 정리돼 있습니다.
 
@@ -175,37 +228,37 @@ chmod +x scripts/start-local.sh scripts/stop-local.sh   # 최초 1회
 >
 > 아래 2-1 ~ 2-3 은 이 스크립트가 내부적으로 수행하는 단계를 수동으로 풀어 쓴 것입니다(원리 이해/디버깅용).
 
-### 2-1. 서비스 배포 (이미지 빌드 → minikube 로드 → apply)
+### 2-1. 서비스 배포 (이미지 빌드 → apply)
 
-각 서비스에 `Dockerfile`(멀티스테이지 빌드)이 포함되어 있습니다. **로컬 docker로 빌드한 이미지는 minikube가 바로 보지 못하므로, 빌드 후 `minikube image load`로 밀어넣어야 합니다.**
+각 서비스에 `Dockerfile`(멀티스테이지 빌드)이 포함되어 있습니다. **로컬 docker 로 빌드한 이미지는 minikube 가 보지 못하므로, `eval $(minikube docker-env)` 로 minikube 안의 데몬에 직접 빌드합니다.**
 
-```powershell
+```bash
 # (저장소 루트에서 실행. 쿠버네티스 매니페스트는 infra/ 폴더에 모여 있음)
+# PowerShell 이라면 docker-env 전환만 다르다:
+#   & minikube docker-env --shell powershell | Invoke-Expression
 
-# 1) 인프라(Kafka 3대 / Redis / ES / Kibana / Kafka-UI) 및 토픽 생성
+# 1) 볼륨(PVC) → 인프라(Kafka 3대 / Redis / ES / Kibana / Kafka-UI) 및 토픽 생성
+kubectl apply -f infra/volumes.yaml
 kubectl apply -f infra/infra.yaml
 
-# 2) 예매 서비스 (Producer, 외부 8085 → 내부 8080)
+# 2) 이후 docker 명령이 minikube 안의 데몬을 향하게 한다
+eval $(minikube docker-env)
+
+# 3) 예매 서비스 (Producer, 외부 8085 → 내부 8080)
 #    Dockerfile 은 각 서비스 폴더에 있으므로 빌드는 그 폴더로 이동해서 수행
-cd ticket-reservation-service
-docker build -t ticket-reservation-service:latest .
-minikube image load ticket-reservation-service:latest
-cd ..
+(cd ticket-reservation-service && docker build -t ticket-reservation-service:latest .)
 kubectl apply -f infra/ticket-reservation-depl.yaml
 
-# 3) 결제 서비스 (Consumer, 8080)
-cd ticket-payment-service
-docker build -t ticket-payments-service:latest .
-minikube image load ticket-payments-service:latest
-cd ..
+# 4) 결제 서비스 (Consumer, 8080)
+(cd ticket-payment-service && docker build -t ticket-payments-service:latest .)
 kubectl apply -f infra/ticket-payment-depl.yaml
 
-# 4) KEDA 오토스케일 (Kafka lag 기반 HPA)
+# 5) KEDA 오토스케일 (Kafka lag 기반 HPA)
 kubectl apply -f infra/ticket-payments-keda-broker-alias.yaml   # keda 네임스페이스용 Kafka 별칭(아래 설명)
 kubectl apply -f infra/ticket-payments-keda.yaml
 ```
 
-> **이미지 수정 후 재배포 시:** `docker build` → `minikube image load` → `kubectl rollout restart deploy/<이름>` 순서로 진행하세요. (`imagePullPolicy: IfNotPresent`라 rollout restart로 새 이미지를 다시 읽게 해야 합니다.)
+> **이미지 수정 후 재배포 시:** `docker build` → `kubectl rollout restart deploy/<이름>` 순서로 진행하세요. (`imagePullPolicy: IfNotPresent` 라 rollout restart 로 새 이미지를 다시 읽게 해야 합니다.)
 
 ### 2-2. 로컬에서 접속하기 (port-forward)
 
