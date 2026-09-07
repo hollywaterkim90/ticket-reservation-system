@@ -97,7 +97,7 @@ class OutboxRelayTest {
                 .build());
 
         // when: 릴레이 1회 수동 실행 (내부에서 SKIP LOCKED 로 행을 잠그고 → 발행 → 삭제)
-        relay.publishPending();
+        relay.lockUnpublishedBatch();
 
         // then-1: 실제 ticket-payments 토픽에 그 메시지가 도착했는가
         ConsumerRecord<String, String> received = pollOne("ticket-payments");
@@ -128,7 +128,7 @@ class OutboxRelayTest {
                 .build());
 
         // when: 릴레이 1회 실행 — 개별 행의 실패가 배치 전체를 죽이면 안 된다
-        relay.publishPending();
+        relay.lockUnpublishedBatch();
 
         // then
         assertThat(outboxRepository.findById(outboxId)).isPresent();

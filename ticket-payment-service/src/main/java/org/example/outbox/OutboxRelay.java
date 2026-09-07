@@ -39,8 +39,8 @@ public class OutboxRelay {
 
     @Scheduled(fixedDelayString = "${outbox.relay.interval-ms:1000}")
     @Transactional
-    public void publishPending() {
-        List<OutboxEvent> batch = outboxRepository.lockPendingBatch();
+    public void lockUnpublishedBatch() {
+        List<OutboxEvent> batch = outboxRepository.lockNextBatch();
         if (batch.isEmpty()) return;
 
         int sent = 0;

@@ -13,5 +13,5 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, String
     // 반드시 트랜잭션 안에서 호출해야 한다(OutboxRelay 가 @Transactional).
     @Query(value = "SELECT * FROM outbox_event " +
             "ORDER BY created_at LIMIT 100 FOR UPDATE SKIP LOCKED", nativeQuery = true)
-    List<OutboxEvent> lockPendingBatch();
+    List<OutboxEvent> lockNextBatch();
 }
