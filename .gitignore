@@ -26,3 +26,6 @@ bin/
 
 # 로컬 실행 시 생성되는 port-forward PID 기록
 scripts/.local-pf-pids
+
+# Flink 커넥터 JAR (5MB, 메이븐에서 다시 받으면 됨)
+flink/lib/*.jar
