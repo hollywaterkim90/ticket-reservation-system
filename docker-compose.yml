@@ -2,6 +2,7 @@ version: '3.8'
 
 # docker compose up -d kafka-1 kafka-2 kafka-3
 # docker compose up -d local-elasticsearch local-kibana local-redis redis-insight kafka-ui
+# docker compose up -d flink-jobmanager flink-taskmanager   # UI http://localhost:8081
 
 services:
   # --- Kafka Broker 1 ---
@@ -20,12 +21,12 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
-      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      KAFKA_LOG_DIRS: '/var/lib/kafka/data'   # 이미지 기본 데이터 경로(appuser 소유). /tmp/... 는 이미지에 없는 경로라 볼륨이 root 소유로 생겨 권한 거부된다.
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_MIN_INSYNC_REPLICAS: 2
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
     volumes:
-      - kafka-1-data:/tmp/kraft-combined-logs
+      - kafka-1-data:/var/lib/kafka/data
 
   # --- Kafka Broker 2 ---
   kafka-2:
@@ -43,12 +44,12 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
-      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      KAFKA_LOG_DIRS: '/var/lib/kafka/data'   # 이미지 기본 데이터 경로(appuser 소유). /tmp/... 는 이미지에 없는 경로라 볼륨이 root 소유로 생겨 권한 거부된다.
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_MIN_INSYNC_REPLICAS: 2
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
     volumes:
-      - kafka-2-data:/tmp/kraft-combined-logs
+      - kafka-2-data:/var/lib/kafka/data
 
   # --- Kafka Broker 3 ---
   kafka-3:
@@ -66,12 +67,12 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
-      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      KAFKA_LOG_DIRS: '/var/lib/kafka/data'   # 이미지 기본 데이터 경로(appuser 소유). /tmp/... 는 이미지에 없는 경로라 볼륨이 root 소유로 생겨 권한 거부된다.
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_MIN_INSYNC_REPLICAS: 2
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
     volumes:
-      - kafka-3-data:/tmp/kraft-combined-logs
+      - kafka-3-data:/var/lib/kafka/data
 
   # 🚀 토픽 자동 생성을 위한 Init 컨테이너
   init-kafka:
