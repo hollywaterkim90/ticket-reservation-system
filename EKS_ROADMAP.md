@@ -8,6 +8,10 @@
 - 근거: 예매는 Postgres 를 안 쓴다(의존 = Redis 기동 필수, Kafka 는 요청 시점). 결제는 Postgres+Kafka+ES 를 다 요구(`TicketIndexListener`).
 - PVC 는 Kafka 가 가져온다 → 2단계 EBS CSI(IRSA)가 억지 없이 필요해진다.
 
+**왜 — 이미 겪은 문제가 관리형에서는 다른 방식으로 풀린다**
+- [#31](../../issues/31) 유실을 막으려 넣은 Outbox 의 저장소가 `emptyDir` 이던 모순 → **EBS(PVC)** 로 풀린다
+- [#33](../../issues/33) `minikube image load` 는 같은 태그를 덮지 않아 옛 이미지가 조용히 계속 돌던 문제 → **레지스트리(ECR) + 커밋 해시 태그**로 풀린다
+
 > 이 문서는 절대 기준이 아니다. 코드를 확인해 어긋나면 고친다.
 
 ---
