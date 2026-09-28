@@ -154,6 +154,39 @@ services:
     depends_on:
       - local-redis
 
+  # --- Flink JobManager (잡 접수·조율 + 웹 UI 8081) ---
+  flink-jobmanager:
+    image: flink:1.20
+    container_name: flink-jobmanager
+    command: jobmanager
+    ports:
+      - "8081:8081"
+    environment:
+      # 공식 이미지는 이 값을 flink-conf 에 합쳐 넣는다. TaskManager 가 붙을 주소.
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+    volumes:
+      # 이미지에 카프카 커넥터가 없다. lib 디렉터리 통째로 마운트하면 기존 라이브러리가 가려지므로 파일 하나만 얹는다.
+      - ./flink/lib/flink-sql-connector-kafka.jar:/opt/flink/lib/flink-sql-connector-kafka.jar
+    depends_on:
+      - kafka-1
+      - kafka-2
+      - kafka-3
+
+  # --- Flink TaskManager (실제 연산. 슬롯 = 병렬 실행 단위) ---
+  flink-taskmanager:
+    image: flink:1.20
+    container_name: flink-taskmanager
+    command: taskmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 3
+    volumes:
+      - ./flink/lib/flink-sql-connector-kafka.jar:/opt/flink/lib/flink-sql-connector-kafka.jar
+    depends_on:
+      - flink-jobmanager
+
 # 브로커 로그를 컨테이너 재생성 후에도 보존한다. 없으면 재시작 시 토픽이 전부 사라진다.
 volumes:
   kafka-1-data:
