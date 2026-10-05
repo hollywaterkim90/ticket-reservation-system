@@ -4,9 +4,10 @@
 
 > **작업 시작할 때 이 세 줄만 읽으면 된다. 끝낼 때 이 세 줄만 고친다.**
 
-- **끝남**: Budgets 알림 / IAM 준비 / 로컬 검증(예매는 Redis 만으로 뜬다, ES env 삭제 가능) / 브랜치 3개 푸시
-- **다음 한 걸음**: **ECR 저장소 생성 + 이미지 푸시** (`docker build --platform linux/amd64`, 태그는 커밋 해시)
-- **그다음**: Terraform 스켈레톤(`terraform/`, provider, `.gitignore`) → **여기까지 하고 이사 끝날 때까지 동결**
+- **끝남**: Budgets 알림 / IAM 준비 / 로컬 검증(예매는 Redis 만으로 뜬다, ES env 삭제 가능) / 브랜치 3개 병합 / **ECR 저장소 생성 + 이미지 푸시 (2026-10-05)**
+  - `846456671266.dkr.ecr.ap-northeast-2.amazonaws.com/ticket-reservation-service:15e122c` (amd64/linux, 약 164MB)
+- **다음 한 걸음**: **Terraform 스켈레톤** — `terraform/`, provider, `.gitignore`(`*.tfstate`·`.terraform/`·`*.tfvars` 먼저), 리전 `ap-northeast-2`, **EKS 버전은 표준 지원 중 N-1**(4-1 업그레이드용, 확장 지원 버전은 요금 6배)
+- **그다음**: **여기까지 하고 이사 끝날 때까지 동결**(1단계부터는 2027 1월 이후)
 - **보류**: 1단계 이후 전부(이사 후 재개) / 플링크(첫 슬라이스로 종료) / PR 열기 / 이슈 #40·#42 수정
 
 **페이스 결정(2026-09-29)**: 지원 재개가 2027 1~2월이므로 **10~11월에 못 끝내도 아무 일도 안 생긴다.**
@@ -66,6 +67,14 @@
 | **4. 운영 요소** | **Prometheus + Grafana**(`kube-prometheus-stack` Helm 차트 하나에 Prometheus·Grafana·Alertmanager 포함), **limits 조정 — 1단계 추정치 vs 실측 대조(6)**, AZ 묶임(7), **EKS 버전 업그레이드 1회**(아래 4-1) | 공고 빈칸(Prometheus/Grafana) 해소. 시선에이아이 자격요건 |
 | **5. 비용·정리** | `terraform destroy` 실패 겪기(ELB·EBS 잔여 ENI) → k8s 리소스 먼저 삭제 → 재시도. 며칠치 실측 | 글②③ 재료 |
 | **6. 글 3개** | ①온프레미스 폐쇄망 ↔ EKS fully private 비교(최대 차별화) ②destroy 함정 ③비용 실측 | 본체 |
+
+### 0-2. ⚠️ 도커 데몬이 둘이면 빌드와 푸시가 엇갈린다 (2026-10-05 실제로 겪음)
+맥에 **Docker Desktop + Colima** 두 데몬이 있었다. 빌드는 성공하고 로그에 `naming to ...:15e122c done` 까지 찍혔는데
+`docker image inspect` 는 `No such image` → 이미지는 **Colima 데몬 안**, 셸은 **Docker Desktop** 을 보고 있었다.
+- 확인: `docker context ls` (별표가 현재), `docker --context <이름> image ls`
+- **ECR 로그인도 데몬별로 따로 해야 한다.** `aws ecr get-login-password | docker --context colima login ...`
+- **이슈 #33(`minikube image load` 가 같은 태그를 안 덮던 문제)과 같은 종류** — "이미지가 실제로 어디에 있는가".
+- 2026-10-05 이후 **Docker Desktop 은 쓰지 않고 Colima 하나로 통일**한다 → `docker context use colima`
 
 ### 0-1. 아키텍처 선택 — amd64 (2026-09-22 확정)
 **노드 `t3.medium`(amd64) + 이미지 `--platform linux/amd64`.** 이유: 실무 표준이 아직 x86.
