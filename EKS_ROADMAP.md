@@ -1,13 +1,14 @@
 # EKS 로드맵 — 티켓 예매 시스템을 EKS로
 
-## 📍 지금 여기 (2026-10-16 갱신)
+## 📍 지금 여기 (2026-10-16 갱신 2)
 
 > **작업 시작할 때 이 세 줄만 읽으면 된다. 끝낼 때 이 세 줄만 고친다.**
 
 - **끝남**: Budgets 알림 / IAM 준비 / 로컬 검증(예매는 Redis 만으로 뜬다, ES env 삭제 가능) / 브랜치 3개 병합 / **ECR 저장소 생성 + 이미지 푸시 (2026-10-05)**
   - `846456671266.dkr.ecr.ap-northeast-2.amazonaws.com/ticket-reservation-service:15e122c` (amd64/linux, 약 164MB)
   - **Terraform 스켈레톤 (2026-10-16)** — `terraform/{versions,provider,variables}.tf` + `.gitignore`. `init`·`validate`·`plan` 통과(No changes). 리소스는 0개.
-- **✅ 0단계 완료.** 다음은 **1단계(public EKS + 앱)이고 이사 끝난 뒤 2027 1월 이후**에 시작한다.
+- **✅ 0단계 완료.** 1단계 착수: **`terraform/vpc.tf` 작성 완료**(validate 통과, `apply` 는 안 함 → 비용 0).
+- **다음 한 걸음**: **EKS 클러스터 모듈**(`terraform/eks.tf`) → 그다음 노드그룹. 그 뒤 `apply` 는 **이사 끝난 뒤 2027 1월 이후**.
 - **1단계 시작 시 확정된 값**: 리전 `ap-northeast-2` / **EKS `1.36`**(최신 1.37 보다 N-1, 표준 지원 2027-08-02 까지. 1.35 는 2027-03-27 종료라 밀리면 확장 지원=요금 6배) / 노드 `t3.medium`(amd64) / 태그 `Project=ticket-eks`
 - **1단계는 사용자가 직접 작성하고 Claude 가 리뷰한다** — VPC 서브넷 구조·노드 수·엔드포인트 설정은 전부 면접 질문거리([[ai-assisted-learning-rule]] 기준)
 - **보류**: 1단계 이후 전부(이사 후 재개) / 플링크(첫 슬라이스로 종료) / PR 열기 / 이슈 #40·#42 수정
@@ -63,7 +64,7 @@
 | 단계 | 내용 | 나오는 결과물 |
 |---|---|---|
 | **0. 준비** | Budgets 알림 → IAM 준비 → ECR 저장소+이미지 푸시(**`--platform linux/amd64`**) → Terraform 스켈레톤 | 비용 감시 |
-| **1. public EKS + 앱** | Terraform VPC(퍼블릭/프라이빗) + EKS(public endpoint) + 노드그룹은 프라이빗. **예매+Redis 만**, 수정 1 적용, **requests 넣고 노드 산정(1-1)** | 기준선 "앱은 뜬다" (예매 요청은 Kafka 없어 실패 — 정상) + 추정치 기록 |
+| **1. public EKS + 앱** | ✅VPC 작성됨(`vpc.tf`). Terraform VPC(퍼블릭/프라이빗) + EKS(public endpoint) + 노드그룹은 프라이빗. **예매+Redis 만**, 수정 1 적용, **requests 넣고 노드 산정(1-1)** | 기준선 "앱은 뜬다" (예매 요청은 Kafka 없어 실패 — 정상) + 추정치 기록 |
 | **2. Kafka + IRSA** ★ | Kafka 1대 추가(수정 3·3-1) → PVC Pending 을 만남 → EBS CSI(수정 2), AWS LB Controller(수정 4), **metrics-server** (`kubectl top` 으로 실사용량) | "파드마다 IAM 을 왜 쪼개나" 설명 가능 |
 | **3. 조이기** ★★ 본체 | 3a NAT 제거→VPC 엔드포인트(ECR 풀 실패→**S3 Gateway** 필요) / 3b EKS 엔드포인트 Public→Public+Private→**Private only**(kubectl 끊김→bastion) | 깨진 기록 = 글① 재료 |
 | **4. 운영 요소** | **Prometheus + Grafana**(`kube-prometheus-stack` Helm 차트 하나에 Prometheus·Grafana·Alertmanager 포함), **limits 조정 — 1단계 추정치 vs 실측 대조(6)**, AZ 묶임(7), **EKS 버전 업그레이드 1회**(아래 4-1) | 공고 빈칸(Prometheus/Grafana) 해소. 시선에이아이 자격요건 |
