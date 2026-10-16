@@ -1,13 +1,15 @@
 # EKS 로드맵 — 티켓 예매 시스템을 EKS로
 
-## 📍 지금 여기 (2026-09-29 갱신)
+## 📍 지금 여기 (2026-10-16 갱신)
 
 > **작업 시작할 때 이 세 줄만 읽으면 된다. 끝낼 때 이 세 줄만 고친다.**
 
 - **끝남**: Budgets 알림 / IAM 준비 / 로컬 검증(예매는 Redis 만으로 뜬다, ES env 삭제 가능) / 브랜치 3개 병합 / **ECR 저장소 생성 + 이미지 푸시 (2026-10-05)**
   - `846456671266.dkr.ecr.ap-northeast-2.amazonaws.com/ticket-reservation-service:15e122c` (amd64/linux, 약 164MB)
-- **다음 한 걸음**: **Terraform 스켈레톤** — `terraform/`, provider, `.gitignore`(`*.tfstate`·`.terraform/`·`*.tfvars` 먼저), 리전 `ap-northeast-2`, **EKS 버전은 표준 지원 중 N-1**(4-1 업그레이드용, 확장 지원 버전은 요금 6배)
-- **그다음**: **여기까지 하고 이사 끝날 때까지 동결**(1단계부터는 2027 1월 이후)
+  - **Terraform 스켈레톤 (2026-10-16)** — `terraform/{versions,provider,variables}.tf` + `.gitignore`. `init`·`validate`·`plan` 통과(No changes). 리소스는 0개.
+- **✅ 0단계 완료.** 다음은 **1단계(public EKS + 앱)이고 이사 끝난 뒤 2027 1월 이후**에 시작한다.
+- **1단계 시작 시 확정된 값**: 리전 `ap-northeast-2` / **EKS `1.36`**(최신 1.37 보다 N-1, 표준 지원 2027-08-02 까지. 1.35 는 2027-03-27 종료라 밀리면 확장 지원=요금 6배) / 노드 `t3.medium`(amd64) / 태그 `Project=ticket-eks`
+- **1단계는 사용자가 직접 작성하고 Claude 가 리뷰한다** — VPC 서브넷 구조·노드 수·엔드포인트 설정은 전부 면접 질문거리([[ai-assisted-learning-rule]] 기준)
 - **보류**: 1단계 이후 전부(이사 후 재개) / 플링크(첫 슬라이스로 종료) / PR 열기 / 이슈 #40·#42 수정
 
 **페이스 결정(2026-09-29)**: 지원 재개가 2027 1~2월이므로 **10~11월에 못 끝내도 아무 일도 안 생긴다.**

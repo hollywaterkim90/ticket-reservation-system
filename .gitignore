@@ -29,3 +29,10 @@ scripts/.local-pf-pids
 
 # Flink 커넥터 JAR (5MB, 메이븐에서 다시 받으면 됨)
 flink/lib/*.jar
+
+# Terraform — state 에는 리소스 정보와 민감한 값이 평문으로 들어간다. 공개 저장소에 올리면 안 된다.
+terraform/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform.lock.hcl
