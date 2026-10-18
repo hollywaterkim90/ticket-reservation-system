@@ -1,0 +1,64 @@
+# 1단계 예매 서비스 — 목표는 "앱은 뜬다"는 기준선 확보.
+# ⚠️ Kafka 가 없으므로 예매 요청(POST /reserve)은 60초 뒤 500 이 된다. 이 단계에서는 정상이다.
+#    (max.block.ms 기본 60초. 로컬 검증 2026-09-22 / 이슈 #40)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ticket-reservation-service
+  labels:
+    app: ticket-reservation-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ticket-reservation-service
+  template:
+    metadata:
+      labels:
+        app: ticket-reservation-service
+    spec:
+      containers:
+      - name: ticket-reservation-service
+        # 수정 1: 로컬 이미지 → ECR + 커밋 해시 태그(:latest 금지 — 어떤 코드가 도는지 특정되어야 한다)
+        image: 846456671266.dkr.ecr.ap-northeast-2.amazonaws.com/ticket-reservation-service:15e122c
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SERVER_PORT
+          value: "8080"       # application.yml 의 8085 를 오버라이드
+        - name: SPRING_DATA_REDIS_HOST
+          value: "local-redis"
+        - name: SPRING_DATA_REDIS_PORT
+          value: "6379"
+        # 수정 3: ES env 삭제 — 리포지토리가 0개라 ES 에 연결을 시도하지 않는다(로컬 확인 2026-09-22).
+        #         Kafka env 도 1단계엔 없음. 2단계에서 브로커 1대를 올릴 때 추가한다.
+        resources:
+          requests:
+            cpu: 500m        # 0.5 vCPU
+            memory: 1Gi      # JVM 기본 힙은 컨테이너 메모리의 약 1/4
+        # 수정 8: actuator 가 없어 HTTP 헬스 경로가 없다 → TCP 소켓으로 확인
+        startupProbe:
+          tcpSocket:
+            port: 8080
+          failureThreshold: 30
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ticket-reservation-service
+spec:
+  # 1단계는 ClusterIP + kubectl port-forward. 비용 0.
+  # NodePort 는 노드가 private 서브넷이라 외부에서 닿지 않고,
+  # LoadBalancer 는 수정 4(AWS LB Controller + IRSA)가 필요해 2단계로 미룬다.
+  type: ClusterIP
+  ports:
+  - port: 8085
+    targetPort: 8080
+  selector:
+    app: ticket-reservation-service

@@ -1,0 +1,38 @@
+# 1단계 Redis — 예매 서비스의 유일한 기동 의존성.
+# RedisDataInitializer 가 ApplicationReadyEvent 에서 재고를 적재하므로 Redis 가 먼저 떠 있어야 한다.
+# 볼륨 없음(emptyDir) — 재시작하면 재고가 날아가지만 기동 시 다시 채운다. PVC 는 2단계 Kafka 부터.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: local-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: local-redis
+  template:
+    metadata:
+      labels:
+        app: local-redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7.2-alpine
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            cpu: 100m        # 0.1 vCPU — 티켓 재고 키 3개뿐
+            memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: local-redis    # 예매 서비스가 이 이름으로 찾는다(SPRING_DATA_REDIS_HOST)
+spec:
+  type: ClusterIP      # 클러스터 안에서만. 외부 노출 불필요
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app: local-redis

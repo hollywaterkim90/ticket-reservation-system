@@ -6,9 +6,12 @@
 
 - **끝남**: Budgets 알림 / IAM 준비 / 로컬 검증(예매는 Redis 만으로 뜬다, ES env 삭제 가능) / 브랜치 3개 병합 / **ECR 저장소 생성 + 이미지 푸시 (2026-10-05)**
   - `846456671266.dkr.ecr.ap-northeast-2.amazonaws.com/ticket-reservation-service:15e122c` (amd64/linux, 약 164MB)
+  - **1단계 매니페스트 (2026-10-18)** — `infra/eks/{01-redis,02-reservation}.yaml`. 원본 `infra/*.yaml` 은 보존(minikube 비교 서사 유지). ClusterIP + `port-forward`(비용 0), requests 추정값 입력
+  - **`terraform/eks.tf` (2026-10-18)** — 모듈 `~> 21.0`, public 엔드포인트, `authentication_mode=API`, t3.medium 2대
   - **Terraform 스켈레톤 (2026-10-16)** — `terraform/{versions,provider,variables}.tf` + `.gitignore`. `init`·`validate`·`plan` 통과(No changes). 리소스는 0개.
 - **✅ 0단계 완료.** 1단계 착수: **`terraform/vpc.tf` 작성 완료**(validate 통과, `apply` 는 안 함 → 비용 0).
-- **다음 한 걸음**: **EKS 클러스터 모듈**(`terraform/eks.tf`) → 그다음 노드그룹. 그 뒤 `apply` 는 **이사 끝난 뒤 2027 1월 이후**.
+- **✅ 1단계 코드 완료**(VPC·EKS·매니페스트). **다음 한 걸음 = `terraform apply` 이고 이사 끝난 뒤 2027 1월 이후.** 여기서부터 과금 시작.
+  - apply 후: `aws eks update-kubeconfig` → `kubectl apply -f infra/eks/` → `port-forward` 로 기동 확인 → **requests 추정치 기록**(1-1)
 - **1단계 시작 시 확정된 값**: 리전 `ap-northeast-2` / **EKS `1.36`**(최신 1.37 보다 N-1, 표준 지원 2027-08-02 까지. 1.35 는 2027-03-27 종료라 밀리면 확장 지원=요금 6배) / 노드 `t3.medium`(amd64) / 태그 `Project=ticket-eks`
 - **1단계는 사용자가 직접 작성하고 Claude 가 리뷰한다** — VPC 서브넷 구조·노드 수·엔드포인트 설정은 전부 면접 질문거리([[ai-assisted-learning-rule]] 기준)
 - **보류**: 1단계 이후 전부(이사 후 재개) / 플링크(첫 슬라이스로 종료) / PR 열기 / 이슈 #40·#42 수정
