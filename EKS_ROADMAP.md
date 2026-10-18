@@ -65,7 +65,7 @@
 |---|---|---|
 | **0. 준비** | Budgets 알림 → IAM 준비 → ECR 저장소+이미지 푸시(**`--platform linux/amd64`**) → Terraform 스켈레톤 | 비용 감시 |
 | **1. public EKS + 앱** | ✅VPC 작성됨(`vpc.tf`). Terraform VPC(퍼블릭/프라이빗) + EKS(public endpoint) + 노드그룹은 프라이빗. **예매+Redis 만**, 수정 1 적용, **requests 넣고 노드 산정(1-1)** | 기준선 "앱은 뜬다" (예매 요청은 Kafka 없어 실패 — 정상) + 추정치 기록 |
-| **2. Kafka + IRSA** ★ | Kafka 1대 추가(수정 3·3-1) → PVC Pending 을 만남 → EBS CSI(수정 2), AWS LB Controller(수정 4), **metrics-server** (`kubectl top` 으로 실사용량) | "파드마다 IAM 을 왜 쪼개나" 설명 가능 |
+| **2. Kafka + IRSA** ★ | Kafka 1대 추가(수정 3·3-1) → PVC Pending 을 만남 → EBS CSI(수정 2), AWS LB Controller(수정 4), **metrics-server**(`kubectl top`), **권한 3층 실습(2-1)** | "파드마다 IAM 을 왜 쪼개나" 설명 가능 |
 | **3. 조이기** ★★ 본체 | 3a NAT 제거→VPC 엔드포인트(ECR 풀 실패→**S3 Gateway** 필요) / 3b EKS 엔드포인트 Public→Public+Private→**Private only**(kubectl 끊김→bastion) | 깨진 기록 = 글① 재료 |
 | **4. 운영 요소** | **Prometheus + Grafana**(`kube-prometheus-stack` Helm 차트 하나에 Prometheus·Grafana·Alertmanager 포함), **limits 조정 — 1단계 추정치 vs 실측 대조(6)**, AZ 묶임(7), **EKS 버전 업그레이드 1회**(4-1), **GPU 노드 + vLLM 서빙(4-2)** | 공고 빈칸(Prometheus/Grafana·GPU) 해소 |
 | **5. 비용·정리** | `terraform destroy` 실패 겪기(ELB·EBS 잔여 ENI) → k8s 리소스 먼저 삭제 → 재시도. 며칠치 실측 | 글②③ 재료 |
@@ -91,6 +91,27 @@ limits 와 분리한다. **requests = 스케줄링 기준 = 노드 크기 = 비�
 - 2단계: metrics-server 애드온 → `kubectl top pod/node` 로 실사용량 확인.
 - 4단계: Prometheus 값과 대조 → limits 조정. **"처음 얼마로 잡았고, 실제 얼마였고, 왜 틀렸나"가 글③(비용)의 본체.**
 - ⚠️ 4단계에 몰면 추정이 없어서 이 비교 자체가 생기지 않는다.
+
+### 2-1. 권한 3층 실습 — IRSA / Access Entries / k8s RBAC (2026-10-18 추가)
+IRSA 만으로는 절반이다. **AWS 권한(IRSA)과 클러스터 내부 권한(k8s RBAC)은 다른 층.**
+| 층 | 무엇 | 할 일 |
+|---|---|---|
+| ① 노드그룹 IAM 역할 | 노드가 ECR 풀·CNI IP 할당 | 1단계에 포함 |
+| ② **IRSA** | **파드 단위 IAM** = 최소권한의 클라우드 구현 | EBS CSI·LB Controller 로 이미 함 |
+| ③ **Access Entries**(옛 aws-auth) | IAM 사용자·역할 → k8s 로 매핑 | **두 번째 IAM 사용자를 추가해 `kubectl` 권한 부여**(클러스터는 `admin` 으로 생성됨) |
+| ④ **k8s RBAC** | ServiceAccount / Role·ClusterRole / Binding | **읽기 전용 ClusterRole 하나 만들어 붙여보기** (30분~1h, 비용 0) |
+💼 **업무 연결**: 백업·DR 제품(Veeam Kasten 류)은 **클러스터 전체를 읽는 ClusterRole** 을 요구한다 → 보안 검토에서 반드시 걸리는 지점이고 사용자가 기여할 자리. ④를 직접 해보면 "어디까지 주고 어디서 끊나"를 말할 수 있다.
+
+### 4-3. PVC 스냅샷 → 복원 (DR 연습) (2026-10-18 추가)
+**왜**: 회사에서 **재해복구(DR) 솔루션 커스터마이징 프로젝트**에 참여 예정(k8s 적용 가능성 높음). 2~3h, **비용 거의 0**(스냅샷 저장료 몇 센트).
+대상은 **Kafka PVC**(이미 있음). EBS CSI(2단계) 의 연장이다.
+| 겪는 것 | DR 개념 |
+|---|---|
+| `VolumeSnapshotClass` + 스냅샷 생성 | 백업 시점 = **RPO**(Recovery Point Objective) |
+| 스냅샷 → PVC 복원 → 파드 재기동 | 복구 시간 = **RTO**(Recovery Time Objective) 체감 |
+| **다른 AZ 로 복원 시도** | **사이트 전환의 축소판.** AZ 묶임과 또 충돌 |
+| 복원 후 Kafka 데이터 확인 | **일관성**(crash-consistent vs application-consistent) |
+→ 글감: "스냅샷은 떴는데 복원이 안 되는 이유"(StorageClass·AZ·StatefulSet 재바인딩).
 
 ### 4-2. GPU 노드 + vLLM 서빙 (2026-10-17 추가)
 **왜**: AI 인프라·플랫폼 간판의 유일한 빈 칸이 GPU(공고 40건 중 71% 언급). vLLM 은 대부분 "우대".
@@ -128,12 +149,12 @@ limits 와 분리한다. **requests = 스케줄링 기준 = 노드 크기 = 비�
 |---|---|---|
 | 0. 준비 | 3~4h | 9월 4주 |
 | 1. public EKS + 앱 | 6~8h | 10월 1~2주 |
-| 2. Kafka + IRSA | 4~6h | 10월 3주 |
+| 2. Kafka + IRSA (+권한 3층 1~2h) | 5~8h | 2027년 2월 |
 | 3. 조이기 | 8~10h | 10월 4주 ~ 11월 2주 |
-| 4. 운영 요소 (+업그레이드 3~4h, +GPU·vLLM 6~10h) | 13~20h | 2027년 5월 |
+| 4. 운영 요소 (+업그레이드 3~4h, +GPU·vLLM 6~10h, +스냅샷 DR 2~3h) | 15~23h | 2027년 5월 |
 | 5. 비용·정리 | 3~4h | 11월 4주~12월 초 |
 | 6. 글 3개 | 6~9h | 12월 이후 / 이사 끝나고 |
-| **합계** | **43~61h** (비용 2.5~3만원) | |
+| **합계** | **46~67h** (비용 2.5~3만원) | |
 
 - **12월은 비워둔다(이사).** 각 단계가 독립적이라 중간에 끊겨도 잃는 게 없다.
 - 지원 재개는 2027년 1~2월(사내대출 정리 후)이므로 **일정에 여유가 있다.**
