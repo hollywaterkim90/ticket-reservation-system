@@ -15,6 +15,8 @@
 - **▶ 2단계 코드 착수 (2026-10-19, apply 없음)** — 다음 한 걸음 = **`infra/eks/03-kafka.yaml` 작성**(Kafka 1대, 원본 `infra/infra.yaml` 에서 옮김)
   - 확정값: requests `250m`/`512Mi` / **PVC 붙임**(Pending → EBS CSI·IRSA 를 끌고 옴) / 2단계 합계 850m/1792Mi → t3.medium 1대에 들어감
   - 고칠 것: 수정 3-1(3대 전제 5개 → 1대) + 예매에 `SPRING_KAFKA_BOOTSTRAP_SERVERS` 1대 주소 추가
+  - **스토리지 설계 확정 (2026-10-19)**: 파일 `03-kafka-storage.yaml`(StorageClass + PVC(PersistentVolumeClaim)) / `04-kafka.yaml`(본체) 분리. StorageClass 직접 생성 — `ebs.csi.aws.com`, `gp3`, `reclaimPolicy: Delete`(실습 반복), `volumeBindingMode: WaitForFirstConsumer`(EBS(Elastic Block Store) 는 같은 AZ(Availability Zone) 노드에만 붙음). **▶ 다음 = `03-kafka-storage.yaml` 직접 작성**
+  - ⚠️ 정리 순서: PVC 먼저 삭제 → `terraform destroy`. 클러스터부터 허물면 Delete 가 실행되지 않아 EBS 가 남아 과금
 - **1단계 시작 시 확정된 값**: 리전 `ap-northeast-2` / **EKS `1.36`**(최신 1.37 보다 N-1, 표준 지원 2027-08-02 까지. 1.35 는 2027-03-27 종료라 밀리면 확장 지원=요금 6배) / 노드 `t3.medium`(amd64) / 태그 `Project=ticket-eks`
 - **1단계는 사용자가 직접 작성하고 Claude 가 리뷰한다** — VPC 서브넷 구조·노드 수·엔드포인트 설정은 전부 면접 질문거리([[ai-assisted-learning-rule]] 기준)
 - **보류**: `apply` 이후 전부(이사 후 재개, 코드 작성은 지금 진행) / 플링크(첫 슬라이스로 종료) / PR 열기 / 이슈 #40·#42 수정

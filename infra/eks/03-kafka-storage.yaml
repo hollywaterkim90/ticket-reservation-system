@@ -1,0 +1,31 @@
+# 2단계 Kafka 스토리지 — StorageClass + PVC.
+# PVC 를 본체(04-kafka.yaml)와 다른 파일에 둔 이유:
+#   같은 파일이면 `kubectl delete -f 04-kafka.yaml` 한 번에 짐(데이터)도 같이 지워져 날아간다.
+#   EKS 는 더 위험하다 — reclaimPolicy: Delete 라 PVC 를 지우면 EBS 볼륨이 삭제된다(minikube 처럼 폴더가 남지 않음).
+#
+# ⚠️ 정리 순서: 이 파일을 먼저 delete → 그다음 terraform destroy.
+#   순서를 바꾸면 클러스터가 먼저 사라져 PVC 삭제를 처리할 쿠버네티스가 없다.
+#   EBS 볼륨은 CSI 드라이버가 만든 것이라 Terraform 도 모른다 → 볼륨이 남아 과금이 계속된다.
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ebs-gp3                   # 회사(EBS) + 등급(gp3). 기본 gp2 와 구분
+provisioner: ebs.csi.aws.com      # EBS CSI 드라이버 — 2단계에서 설치해야 동작한다
+parameters:
+  type: gp3                       # gp2 보다 약 20% 저렴, 기본 성능 3000 IOPS
+reclaimPolicy: Delete             # 실습이라 apply/destroy 반복 — Retain 이면 남는 EBS 볼륨을 매번 손으로 지워야 함. 운영이면 Retain
+volumeBindingMode: WaitForFirstConsumer  # 스케줄러가 파드를 노드에 배치할 때까지 EBS 볼륨 생성을 미룬다 → 그 노드의 AZ 에 생성(EBS 볼륨은 같은 AZ 노드에만 붙음)
+---
+# kafka-1 로그 볼륨 — Kafka 1대라 PVC 도 하나.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kafka-1-data
+spec:
+  storageClassName: ebs-gp3       # 위 StorageClass. 비우면 EKS 1.30+ 는 기본 클래스가 없어 Pending
+  accessModes:
+  - ReadWriteOnce                 # EBS 볼륨은 노드 한 대에만 붙는다
+  resources:
+    requests:
+      storage: 1Gi                # gp3 최소 크기. 실습용이라 충분

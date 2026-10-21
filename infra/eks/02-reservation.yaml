@@ -1,6 +1,6 @@
-# 1단계 예매 서비스 — 목표는 "앱은 뜬다"는 기준선 확보.
-# ⚠️ Kafka 가 없으므로 예매 요청(POST /reserve)은 60초 뒤 500 이 된다. 이 단계에서는 정상이다.
-#    (max.block.ms 기본 60초. 로컬 검증 2026-09-22 / 이슈 #40)
+# 예매 서비스 — 1단계 목표는 "앱은 뜬다"는 기준선 확보.
+# 1단계: Kafka 가 없어 예매 요청(POST /reserve)은 60초 뒤 500 이 된다(max.block.ms 기본 60초. 로컬 검증 2026-09-22 / 이슈 #40).
+# 2단계: 04-kafka.yaml 의 브로커 1대 주소를 넣었다 → 이 500 이 사라지는 것이 2단계 기준선 비교.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -31,8 +31,11 @@ spec:
           value: "local-redis"
         - name: SPRING_DATA_REDIS_PORT
           value: "6379"
+        # 수정 3: Kafka 주소를 1대로 — application.yml 기본값(localhost:9092~9094)은 파드 안에선 자기 자신이라 접속 불가.
+        #         원본(infra/ticket-reservation-depl.yaml)은 3대 주소 — 없는 2·3번은 DNS 조회 실패 경고만 남기니 실제 구성대로 1대만 둔다.
+        - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka-1-service:9092"
         # 수정 3: ES env 삭제 — 리포지토리가 0개라 ES 에 연결을 시도하지 않는다(로컬 확인 2026-09-22).
-        #         Kafka env 도 1단계엔 없음. 2단계에서 브로커 1대를 올릴 때 추가한다.
         resources:
           requests:
             cpu: 500m        # 0.5 vCPU
