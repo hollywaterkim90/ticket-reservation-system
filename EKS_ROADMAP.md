@@ -1,6 +1,6 @@
 # EKS 로드맵 — 티켓 예매 시스템을 EKS로
 
-## 📍 지금 여기 (2026-10-19 갱신)
+## 📍 지금 여기 (2026-10-22 갱신)
 
 > **작업 시작할 때 이 세 줄만 읽으면 된다. 끝낼 때 이 세 줄만 고친다.**
 
@@ -12,14 +12,12 @@
 - **✅ 0단계 완료.** 1단계 착수: **`terraform/vpc.tf` 작성 완료**(validate 통과, `apply` 는 안 함 → 비용 0).
 - **✅ 1단계 코드 완료**(VPC·EKS·매니페스트). **다음 한 걸음 = `terraform apply` 이고 이사 끝난 뒤 2027 1월 이후.** 여기서부터 과금 시작.
   - apply 후: `aws eks update-kubeconfig` → `kubectl apply -f infra/eks/` → `port-forward` 로 기동 확인 → **requests 추정치 기록**(1-1)
-- **▶ 2단계 코드 착수 (2026-10-19, apply 없음)** — 다음 한 걸음 = **`infra/eks/03-kafka.yaml` 작성**(Kafka 1대, 원본 `infra/infra.yaml` 에서 옮김)
-  - 확정값: requests `250m`/`512Mi` / **PVC 붙임**(Pending → EBS CSI·IRSA 를 끌고 옴) / 2단계 합계 850m/1792Mi → t3.medium 1대에 들어감
-  - 고칠 것: 수정 3-1(3대 전제 5개 → 1대) + 예매에 `SPRING_KAFKA_BOOTSTRAP_SERVERS` 1대 주소 추가
-  - **스토리지 설계 확정 (2026-10-19)**: 파일 `03-kafka-storage.yaml`(StorageClass + PVC(PersistentVolumeClaim)) / `04-kafka.yaml`(본체) 분리. StorageClass 직접 생성 — `ebs.csi.aws.com`, `gp3`, `reclaimPolicy: Delete`(실습 반복), `volumeBindingMode: WaitForFirstConsumer`(EBS(Elastic Block Store) 는 같은 AZ(Availability Zone) 노드에만 붙음). **▶ 다음 = `03-kafka-storage.yaml` 직접 작성**
-  - ⚠️ 정리 순서: PVC 먼저 삭제 → `terraform destroy`. 클러스터부터 허물면 Delete 가 실행되지 않아 EBS 가 남아 과금
+- **✅ 2단계 Kafka 매니페스트 완료 (2026-10-20, #48 / PR #49)** — `infra/eks/03-kafka-storage.yaml`(StorageClass `ebs-gp3` + PVC(PersistentVolumeClaim)) · `04-kafka.yaml`(1대, 수정 3-1·`fsGroup: 1000`) · `02-reservation.yaml`(bootstrap 1대 주소)
+  - ⚠️ 정리 순서: PVC 먼저 삭제 → `terraform destroy`. 클러스터부터 허물면 Delete 가 실행되지 않아 EBS(Elastic Block Store) 볼륨이 남아 과금
+- **▶ 다음 한 걸음 = 수정 2: EBS CSI(Container Storage Interface) 드라이버 + IRSA(IAM Roles for Service Accounts), Terraform (#51)** — `validate`·`plan` 까지, apply 없음
 - **1단계 시작 시 확정된 값**: 리전 `ap-northeast-2` / **EKS `1.36`**(최신 1.37 보다 N-1, 표준 지원 2027-08-02 까지. 1.35 는 2027-03-27 종료라 밀리면 확장 지원=요금 6배) / 노드 `t3.medium`(amd64) / 태그 `Project=ticket-eks`
 - **1단계는 사용자가 직접 작성하고 Claude 가 리뷰한다** — VPC 서브넷 구조·노드 수·엔드포인트 설정은 전부 면접 질문거리([[ai-assisted-learning-rule]] 기준)
-- **보류**: `apply` 이후 전부(이사 후 재개, 코드 작성은 지금 진행) / 플링크(첫 슬라이스로 종료) / PR 열기 / 이슈 #40·#42 수정
+- **보류**: `apply` 이후 전부(이사 후 재개, 코드 작성은 지금 진행) / 플링크(첫 슬라이스로 종료, #41 클로즈) / 이슈 #39·#40 수정
 
 **페이스 결정(2026-09-29, 2026-10-19 갱신)**: 지원은 **2027.8 아내 복직 이후**(잔금 전엔 사내대출 때문에 불가), 서류 준비는 2027 상반기이므로 **10~11월에 못 끝내도 아무 일도 안 생긴다.**
 0단계만 닫고 멈춘다. 1단계부터는 `apply`/`destroy` 반복이라 집중이 필요해 이사 준비와 겹치면 손해다.
