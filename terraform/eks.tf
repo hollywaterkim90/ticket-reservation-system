@@ -24,11 +24,12 @@ module "eks" {
   # 노드와 컨트롤플레인 ENI 를 private 서브넷에 둔다. 공인 IP 가 없어 외부에서 직접 접근 불가.
   subnet_ids = module.vpc.private_subnets
 
-  # 기본 애드온 3개만. EBS CSI·LB Controller 는 2단계에서 IRSA 와 함께.
+  # 기본 애드온 3개 + EBS CSI(IRSA 역할은 ebs-csi.tf). LB Controller 는 수정 4 에서.
   addons = {
-    coredns    = {}
-    kube-proxy = {}
-    vpc-cni    = {}
+    coredns            = {}
+    kube-proxy         = {}
+    vpc-cni            = {}
+    aws-ebs-csi-driver = { service_account_role_arn = aws_iam_role.ebs_csi.arn }
   }
 
   # 컨트롤플레인 로그(audit·authenticator 등)는 끈다 — CloudWatch 저장 비용이 든다.
