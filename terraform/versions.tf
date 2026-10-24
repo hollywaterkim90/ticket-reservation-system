@@ -7,5 +7,9 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.0" # 6.x 안에서만 올라간다(6.9 OK, 7.0 X)
     }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 3.0" # 3.0 부터 provider 안 kubernetes 가 블록 → 속성(= { })으로 바뀌었다
+    }
   }
 }
