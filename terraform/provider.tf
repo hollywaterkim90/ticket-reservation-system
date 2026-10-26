@@ -10,3 +10,17 @@ provider "aws" {
     }
   }
 }
+
+# Helm 은 AWS API 가 아니라 클러스터(k8s API)에 설치한다 → 접속 정보가 따로 필요하다.
+# 토큰은 파일에 저장하지 않고 실행할 때마다 aws eks get-token 으로 받는다(15분 만료) — kubeconfig 와 같은 방식.
+provider "helm" {
+  kubernetes = {
+    host                   = module.eks.cluster_endpoint
+    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+    exec = {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "aws"
+      args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name, "--region", var.region]
+    }
+  }
+}
