@@ -55,17 +55,11 @@ apiVersion: v1
 kind: Service
 metadata:
   name: ticket-reservation-service
-  # 수정 4-③ (#58) — LB Controller 가 이 Service 를 보고 NLB 를 만든다.
-  annotations:
-    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing" # 맥에서 접속. 기본값 internal 이면 프라이빗 서브넷에 생겨 밖에서 안 닿는다
-    #   (값이 틀려도 문자열이라 어떤 검사에도 안 걸린다 — "internal-facing" 오타로 실제 확인)
-    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip" # 헬스체크가 노드가 아닌 파드(8080)를 직접 본다. VPC CNI 로 파드가 VPC IP 를 가져서 가능
-    service.beta.kubernetes.io/aws-load-balancer-healthcheck-protocol: "tcp" # 수정 8: actuator 가 없어 HTTP 경로가 없다 → readinessProbe 와 같은 TCP
 spec:
-  # 1단계는 ClusterIP + kubectl port-forward. 비용 0.
-  # NodePort 는 노드가 private 서브넷이라 외부에서 닿지 않는다.
-  type: LoadBalancer
-  loadBalancerClass: service.k8s.aws/nlb # 이 Service 는 LB Controller 담당이라는 표시. 없으면 k8s 내장 컨트롤러가 옛 CLB 를 만든다
+  # 외부 입구는 05-ingress.yaml 의 ALB 하나 — 이 Service 는 클러스터 안에서만(ClusterIP).
+  # 수정 4-③(#58)에서 NLB 로 열었다가 #60 에서 되돌림: 입구가 둘이면 ALB 에서 막은 경로가 NLB 로는 통과한다.
+  #   NLB 설정은 PR #59 에 있다 — apply 때 LB Controller 동작 확인용 첫 단계로 다시 쓸 수 있다.
+  type: ClusterIP
   ports:
   - port: 8085
     targetPort: 8080

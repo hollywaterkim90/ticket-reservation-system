@@ -1,0 +1,25 @@
+# 수정 4-④ (#60) — 외부 입구 = ALB 하나. LB Controller 가 이 Ingress 를 보고 ALB 를 만든다.
+# L7 이라 URL 경로를 본다: /reserve 만 앱으로, 나머지는 ALB 가 직접 404 (앱은 요청을 보지도 못한다).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ticket-reservation
+  annotations:
+    alb.ingress.kubernetes.io/scheme: "internet-facing" # 퍼블릭 서브넷(앞단)에. 기본값 internal 이면 프라이빗에 생겨 맥에서 안 닿는다
+    alb.ingress.kubernetes.io/target-type: "ip" # 파드 IP 를 대상으로 — 헬스체크가 노드가 아닌 파드를 직접 본다(기본값 instance)
+    alb.ingress.kubernetes.io/success-codes: "200,404" # ALB 헬스체크는 HTTP 만 된다(기본 GET / → 200). actuator 가 없어 / 는 404 →
+    #   200 만 받으면 멀쩡한 파드도 늘 unhealthy. 전부 unhealthy 면 ALB 는 fail-open(전부에 보냄)이라
+    #   요청은 가지만, 헬스체크가 죽은 파드를 못 거른다(죽은 파드에도 보내 502). 404 를 "대답은 한다"로 쳐 준다.
+    #   한계: 앱이 고장 나도(예: Kafka 끊김으로 /reserve 500) / 는 404 라 통과. 근본 해결은 actuator /actuator/health(범위 밖)
+spec:
+  ingressClassName: alb # LB Controller 담당 표시 — 차트가 기본으로 만드는 IngressClass(③ 의 loadBalancerClass 와 같은 역할)
+  rules:
+  - http:
+      paths:
+      - path: /reserve
+        pathType: Exact
+        backend:
+          service:
+            name: ticket-reservation-service
+            port:
+              number: 8085
