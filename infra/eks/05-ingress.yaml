@@ -7,10 +7,12 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/scheme: "internet-facing" # 퍼블릭 서브넷(앞단)에. 기본값 internal 이면 프라이빗에 생겨 맥에서 안 닿는다
     alb.ingress.kubernetes.io/target-type: "ip" # 파드 IP 를 대상으로 — 헬스체크가 노드가 아닌 파드를 직접 본다(기본값 instance)
-    alb.ingress.kubernetes.io/success-codes: "200,404" # ALB 헬스체크는 HTTP 만 된다(기본 GET / → 200). actuator 가 없어 / 는 404 →
-    #   200 만 받으면 멀쩡한 파드도 늘 unhealthy. 전부 unhealthy 면 ALB 는 fail-open(전부에 보냄)이라
-    #   요청은 가지만, 헬스체크가 죽은 파드를 못 거른다(죽은 파드에도 보내 502). 404 를 "대답은 한다"로 쳐 준다.
-    #   한계: 앱이 고장 나도(예: Kafka 끊김으로 /reserve 500) / 는 404 라 통과. 근본 해결은 actuator /actuator/health(범위 밖)
+    # 헬스체크: ALB 가 주기적으로 GET / 를 보내고, 앱의 응답 코드가 success-codes 목록에 있으면 "정상"으로 판단한다.
+    #   - 우리 앱엔 / 경로가 없다 → 앱이 살아 있어도 GET / 에는 항상 404 로 응답한다.
+    #   - 기본값 "200" 만 두면 → 404 는 목록에 없음 → 살아 있는 파드를 "비정상"으로 판단한다.
+    #   - 그래서 404 를 목록에 추가 → "404 라도 응답만 하면 살아 있다"로 판단한다. (앱의 응답이 바뀌는 게 아니라 ALB 의 기준이 바뀐다)
+    #   한계: 응답만 하면 통과라 앱 내부 고장은 못 잡는다. 제대로 하려면 actuator 의 /actuator/health 로 헬스체크.
+    alb.ingress.kubernetes.io/success-codes: "200,404"
 spec:
   ingressClassName: alb # LB Controller 담당 표시 — 차트가 기본으로 만드는 IngressClass(③ 의 loadBalancerClass 와 같은 역할)
   rules:
