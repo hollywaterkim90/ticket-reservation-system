@@ -1,26 +1,33 @@
 # EKS 로드맵 — 티켓 예매 시스템을 EKS로
 
-## 📍 지금 여기 (2026-10-22 갱신)
+## 📍 지금 여기 (2026-11-02 갱신)
 
-> **작업 시작할 때 이 세 줄만 읽으면 된다. 끝낼 때 이 세 줄만 고친다.**
+> **작업 시작할 때 이 칸만 읽으면 된다. 끝낼 때 이 칸만 고친다.** 구성도는 [`infra/eks/ARCHITECTURE.md`](infra/eks/ARCHITECTURE.md).
 
-- **끝남**: Budgets 알림 / IAM 준비 / 로컬 검증(예매는 Redis 만으로 뜬다, ES env 삭제 가능) / 브랜치 3개 병합 / **ECR 저장소 생성 + 이미지 푸시 (2026-10-05)**
-  - `846456671266.dkr.ecr.ap-northeast-2.amazonaws.com/ticket-reservation-service:15e122c` (amd64/linux, 약 164MB)
-  - **1단계 매니페스트 (2026-10-18)** — `infra/eks/{01-redis,02-reservation}.yaml`. 원본 `infra/*.yaml` 은 보존(minikube 비교 서사 유지). ClusterIP + `port-forward`(비용 0), requests 추정값 입력
-  - **`terraform/eks.tf` (2026-10-18)** — 모듈 `~> 21.0`, public 엔드포인트, `authentication_mode=API`, t3.medium 2대
-  - **Terraform 스켈레톤 (2026-10-16)** — `terraform/{versions,provider,variables}.tf` + `.gitignore`. `init`·`validate`·`plan` 통과(No changes). 리소스는 0개.
-- **✅ 0단계 완료.** 1단계 착수: **`terraform/vpc.tf` 작성 완료**(validate 통과, `apply` 는 안 함 → 비용 0).
-- **✅ 1단계 코드 완료**(VPC·EKS·매니페스트). **다음 한 걸음 = `terraform apply` 이고 이사 끝난 뒤 2027 1월 이후.** 여기서부터 과금 시작.
-  - apply 후: `aws eks update-kubeconfig` → `kubectl apply -f infra/eks/` → `port-forward` 로 기동 확인 → **requests 추정치 기록**(1-1)
-- **✅ 2단계 Kafka 매니페스트 완료 (2026-10-20, #48 / PR #49)** — `infra/eks/03-kafka-storage.yaml`(StorageClass `ebs-gp3` + PVC(PersistentVolumeClaim)) · `04-kafka.yaml`(1대, 수정 3-1·`fsGroup: 1000`) · `02-reservation.yaml`(bootstrap 1대 주소)
-  - ⚠️ 정리 순서: PVC 먼저 삭제 → `terraform destroy`. 클러스터부터 허물면 Delete 가 실행되지 않아 EBS(Elastic Block Store) 볼륨이 남아 과금
-- **▶ 다음 한 걸음 = 수정 2: EBS CSI(Container Storage Interface) 드라이버 + IRSA(IAM Roles for Service Accounts), Terraform (#51)** — `validate`·`plan` 까지, apply 없음
-- **1단계 시작 시 확정된 값**: 리전 `ap-northeast-2` / **EKS `1.36`**(최신 1.37 보다 N-1, 표준 지원 2027-08-02 까지. 1.35 는 2027-03-27 종료라 밀리면 확장 지원=요금 6배) / 노드 `t3.medium`(amd64) / 태그 `Project=ticket-eks`
-- **1단계는 사용자가 직접 작성하고 Claude 가 리뷰한다** — VPC 서브넷 구조·노드 수·엔드포인트 설정은 전부 면접 질문거리([[ai-assisted-learning-rule]] 기준)
-- **보류**: `apply` 이후 전부(이사 후 재개, 코드 작성은 지금 진행) / 플링크(첫 슬라이스로 종료, #41 클로즈) / 이슈 #39·#40 수정
+- **✅ 0단계** — Budgets 알림(월 $20) / IAM / ECR 이미지 `ticket-reservation-service:15e122c`(amd64) / Terraform 스켈레톤
+- **✅ 1단계 코드** — `terraform/{vpc,eks}.tf`, `infra/eks/{01-redis,02-reservation}.yaml`
+- **✅ 2단계 코드** (전부 `validate`·`plan`·YAML 문법까지, apply 없음 → 비용 0)
+  - Kafka 1대 + EBS 스토리지 (#48) · EBS CSI + IRSA (#51)
+  - LB 시리즈: ① LB Controller IAM (#54) → ② Helm 3.6.0 (#56) → ③ NLB (#58, 이후 되돌림) → ④ Ingress ALB (#60, 이후 삭제) → **⑤ Gateway API = 현재 입구** (#62, `05-gateway.yaml`)
+  - 입구는 하나 — 입구가 둘이면 한쪽에서 막은 경로가 다른 쪽으로 열린다
+- **▶ 다음 한 걸음 = 첫 `apply` — 1단계만** (EKS + 예매 + Redis, 11월 2~3주)
+  - `terraform apply` → `aws eks update-kubeconfig` → `kubectl apply -f infra/eks/01-redis.yaml -f infra/eks/02-reservation.yaml` → `port-forward` 로 기동 확인 → **requests 실측 기록**(1-1) → 아래 체크리스트로 `destroy`
+  - 2단계는 두 번째 세션부터 하나씩 얹는다(EBS CSI→Kafka, LB Controller→Gateway). 한꺼번에 올리면 깨졌을 때 원인을 못 좁힌다
+- **남은 2단계**: metrics-server(`kubectl top`) · 권한 3층(2-1) — apply 뒤에
+- **보류**: 이슈 #39·#40 수정 / 플링크(#41 종료)
 
-**페이스 결정(2026-09-29, 2026-10-19 갱신)**: 지원은 **2027.8 아내 복직 이후**(잔금 전엔 사내대출 때문에 불가), 서류 준비는 2027 상반기이므로 **10~11월에 못 끝내도 아무 일도 안 생긴다.**
-0단계만 닫고 멈춘다. 1단계부터는 `apply`/`destroy` 반복이라 집중이 필요해 이사 준비와 겹치면 손해다.
+### ✅ apply · destroy 체크리스트 (매번)
+**시작 전**
+1. Budgets 알림(월 $20)이 살아 있나 — `aws budgets describe-budgets --account-id 846456671266`
+2. 오늘 범위를 한 줄로 정한다(예: "1단계만"). 2~3시간 안에 끝낼 양
+
+**끝낼 때 — 순서가 중요하다** (Terraform 이 모르는 리소스가 남는다)
+1. k8s 쪽 먼저: `kubectl delete -f infra/eks/05-gateway.yaml`(ALB) → `kubectl delete -f infra/eks/03-kafka-storage.yaml`(PVC → EBS 볼륨)
+2. `terraform destroy`
+3. 남은 게 없는지: `aws elbv2 describe-load-balancers` · `aws ec2 describe-volumes --filters Name=status,Values=available`(어디에도 안 붙은 볼륨 = 남은 것)
+4. '지금 여기' 갱신
+
+**페이스(2026-11-02 갱신)**: 지원은 **2027.8 아내 복직 이후**, 서류 준비는 2027 상반기. apply 를 앞당겨(2027-01 → 2026-11) **가장 큰 4단계를 서류 준비 전에 끝낸다.**
 
 ---
 
@@ -152,21 +159,23 @@ IRSA 만으로는 절반이다. **AWS 권한(IRSA)과 클러스터 내부 권한
 
 ---
 
-## C. 일정 (주 5시간 기준 — 평일 저녁 1회 + 주말 1회, 각 2~2.5시간)
+## C. 일정 (주 5시간 기준 — 평일 저녁 1회 + 주말 1회, 각 2~2.5시간) — 2026-11-02 재조정
 
-| 단계 | 예상 시간 | 목표 시기 |
-|---|---|---|
-| 0. 준비 | 3~4h | 9월 4주 |
-| 1. public EKS + 앱 | 6~8h | 10월 1~2주 |
-| 2. Kafka + IRSA (+권한 3층 1~2h) | 5~8h | 2027년 2월 |
-| 3. 조이기 | 8~10h | 10월 4주 ~ 11월 2주 |
-| 4. 운영 요소 (+업그레이드 3~4h, +GPU·vLLM 6~10h, +스냅샷 DR 2~3h) | 15~23h | 2027년 5월 |
-| 5. 비용·정리 | 3~4h | 11월 4주~12월 초 |
-| 6. 글 3개 | 6~9h | 12월 이후 / 이사 끝나고 |
-| **합계** | **46~67h** (비용 2.5~3만원) | |
+apply 1회 = 2~3시간 띄우고 그날 `destroy`(회당 약 $1). 코드는 0~2단계까지 이미 있다.
 
-- **12월은 비워둔다(이사).** 각 단계가 독립적이라 중간에 끊겨도 잃는 게 없다.
-- 지원은 2027년 8월(아내 복직 이후), 서류 준비는 2027 상반기이므로 **일정에 여유가 있다.**
+| 시기 | 단계 | 예상 시간 | 비고 |
+|---|---|---|---|
+| ~~9월 4주~~ | 0. 준비 | 3~4h | ✅ |
+| **2026-11 2~3주** | 1. 첫 apply — EKS + 예매 + Redis | 2~3h | 기준선 "앱은 뜬다" + requests 실측 |
+| 2026-11 4주 ~ 12월 | 2. Kafka·EBS → LB·Gateway 하나씩 + **일부러 깨 보기** (+권한 3층 1~2h, metrics-server) | 5~8h | `blog-drafts` 의 "apply 때 재현" 목록 |
+| 2027-01 | 3. 조이기 — NAT 제거→VPC 엔드포인트, 엔드포인트 Private only | 8~10h | |
+| 2027-02 ~ 03 | 4. 운영 요소 (+업그레이드 1.36→1.37 3~4h, +GPU·vLLM 6~10h, +스냅샷 DR 2~3h) | 15~23h | 가장 큼. 1.36 표준 지원 2027-08-02 까지 |
+| 2027-04 | 5. 비용·정리 — destroy 실패 겪기 | 3~4h | |
+| **2027-05 ~ 06** | 6. 글 3개 + **서류 준비** | 6~9h | 4단계가 서류 준비와 겹치지 않는다 |
+| **합계** | | **42~61h** (비용 약 $15~25) | |
+
+- **블로그**: 단계가 끝날 때마다 `blog-drafts` 의 "겪은 것"에서 1~2편, 한 편 30분. 6단계의 큰 글 3개는 그 짧은 글들을 엮는다.
+- 각 단계가 독립적이라 중간에 끊겨도 잃는 게 없다.
 - 막히면 그 단계에 시간을 더 쓰되 **범위는 늘리지 않는다.** Terraform CI/CD·멀티환경·Atlantis 는 하지 않는다.
 
 ## D. 예상 비용
