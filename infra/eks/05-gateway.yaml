@@ -1,0 +1,79 @@
+# 수정 4-⑤ (#62) — 외부 입구 = ALB 하나, 이번엔 Gateway API 로. ④ Ingress(PR #61)와 같은 결과를 리소스별로 나눠 쓴다.
+#   Ingress 를 지운 이유: 둘 다 두면 ALB 가 2개 = 입구가 다시 둘(④ 에서 NLB 를 되돌린 것과 같은 이유).
+#
+# 전제 — CRD 가 먼저 있어야 한다(Gateway API 는 k8s 본체에 없다). 버전은 LB Controller v3.6.0 이 요구하는 것에 고정:
+#   kubectl apply --server-side=true -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/standard-install.yaml
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v3.6.0/config/crd/gateway/gateway-crds.yaml
+#   (공식 문서 예시는 두 번째를 main 브랜치에서 받는다 — 버전 고정이 깨져서 태그 경로로 바꿨다)
+#
+# ④ annotation 이 어디로 갔나:
+#   ingressClassName: alb   → GatewayClass.controllerName
+#   scheme                  → LoadBalancerConfiguration.scheme
+#   target-type             → TargetGroupConfiguration.defaultConfiguration.targetType
+#   success-codes           → TargetGroupConfiguration ... healthCheckConfig.matcher.httpCode
+#   path /reserve           → HTTPRoute.rules.matches
+# annotation 은 문자열이라 오타가 통과했지만, 이 필드들은 CRD 스키마로 검증된다.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: aws-alb
+spec:
+  controllerName: gateway.k8s.aws/alb # 이 값을 가진 GatewayClass 만 LB Controller 가 맡는다
+---
+# 데스크 건물(ALB) 한 채 — 플랫폼 팀 몫
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: ticket-gateway
+spec:
+  gatewayClassName: aws-alb
+  infrastructure:
+    parametersRef: # ALB 자체 설정은 별도 리소스로(아래 LoadBalancerConfiguration)
+      group: gateway.k8s.aws
+      kind: LoadBalancerConfiguration
+      name: ticket-gateway-lb
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+---
+apiVersion: gateway.k8s.aws/v1
+kind: LoadBalancerConfiguration
+metadata:
+  name: ticket-gateway-lb
+spec:
+  scheme: internet-facing # 퍼블릭 서브넷에(기본값 internal)
+---
+# 길 안내 — 앱 팀 몫. Gateway 와 분리돼 있어 앱 팀은 ALB 설정을 몰라도 경로만 쓴다
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ticket-reservation
+spec:
+  parentRefs:
+  - name: ticket-gateway
+    sectionName: http
+  rules:
+  - matches:
+    - path:
+        type: Exact
+        value: /reserve # 규칙에 없는 경로는 ALB 가 404 (④ 와 같음)
+    backendRefs:
+    - name: ticket-reservation-service
+      port: 8085
+---
+# 대상 그룹(파드 묶음) 설정 — Service 에 붙는다
+apiVersion: gateway.k8s.aws/v1
+kind: TargetGroupConfiguration
+metadata:
+  name: ticket-reservation-tg
+spec:
+  targetReference:
+    name: ticket-reservation-service
+  defaultConfiguration:
+    targetType: ip # 파드 IP 를 직접 대상으로(기본값 instance)
+    healthCheckConfig:
+      healthCheckProtocol: HTTP
+      healthCheckPath: /
+      matcher:
+        httpCode: "200,404" # / 가 없어 404 — "응답은 한다"를 정상으로. 따옴표 필수(문자열 필드, 숫자면 스키마가 거부)
